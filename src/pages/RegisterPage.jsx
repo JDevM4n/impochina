@@ -1,45 +1,41 @@
-import { useState } from "react";
+// src/pages/RegisterPage.jsx
+import React, { useState } from "react";
 import { register } from "../api/authService";
 
-export default function RegisterPage() {
-  const [form, setForm] = useState({ username: "", password: "" });
+const RegisterPage = () => {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleRegister = async () => {
     try {
-      const res = await register(form);
-      alert(res.data.message);
-      window.location.href = "/login"; // ir a login
+      const data = await register({ username, password });
+      console.log(data.message); // Usuario registrado
+      alert("Usuario registrado correctamente!");
+      // Aquí puedes redirigir al login si quieres
     } catch (err) {
-      alert(err.response?.data?.detail || "Error en el registro");
+      console.error(err.response.data.detail);
+      alert(`Error: ${err.response.data.detail}`);
     }
   };
 
   return (
-    <div className="flex h-screen items-center justify-center bg-blue-100">
-      <form
-        onSubmit={handleSubmit}
-        className="bg-white shadow-lg rounded-xl p-6 w-96"
-      >
-        <h2 className="text-2xl font-bold text-center mb-4 text-blue-700">Registro</h2>
-        <input
-          type="text"
-          placeholder="Usuario"
-          value={form.username}
-          onChange={(e) => setForm({ ...form, username: e.target.value })}
-          className="w-full p-2 mb-3 border rounded"
-        />
-        <input
-          type="password"
-          placeholder="Contraseña"
-          value={form.password}
-          onChange={(e) => setForm({ ...form, password: e.target.value })}
-          className="w-full p-2 mb-3 border rounded"
-        />
-        <button className="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700">
-          Registrarse
-        </button>
-      </form>
+    <div>
+      <h2>Registro</h2>
+      <input
+        type="text"
+        placeholder="Usuario"
+        value={username}
+        onChange={(e) => setUsername(e.target.value)}
+      />
+      <input
+        type="password"
+        placeholder="Contraseña"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+      />
+      <button onClick={handleRegister}>Registrarse</button>
     </div>
   );
-}
+};
+
+export default RegisterPage;
