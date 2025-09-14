@@ -1,4 +1,4 @@
-from app.database import users_collection
+from auth.app.db import users_collection
 from passlib.context import CryptContext
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
