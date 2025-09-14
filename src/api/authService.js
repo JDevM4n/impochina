@@ -1,8 +1,11 @@
-export async function login(username, password) {
-  const res = await fetch(`http://localhost:8001/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password }),
-  });
-  return res.json();
-}
+import axios from "axios";
+
+const API_URL = "http://localhost:8001"; // microservicio auth
+
+export const register = async (userData) => {
+  return await axios.post(`${API_URL}/register`, userData);
+};
+
+export const login = async (userData) => {
+  return await axios.post(`${API_URL}/login`, userData);
+};
