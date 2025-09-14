@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  mongodb-auth:
+    image: mongo:6.0
+    container_name: mongodb-auth
+    ports:
+      - "27018:27017"  # puerto local 27018, interno 27017
+    volumes:
+      - mongo_auth_data:/data/db
+
+  auth-service:
+    build: .
+    container_name: auth-service
+    ports:
+      - "8001:8001"
+    environment:
+      - MONGO_URL=mongodb://mongodb-auth:27017
+    depends_on:
+      - mongodb-auth
+
+volumes:
+  mongo_auth_data:
