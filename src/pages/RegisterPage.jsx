@@ -8,13 +8,20 @@ const RegisterPage = () => {
 
   const handleRegister = async () => {
     try {
-      const data = await register({ username, password });
-      console.log(data.message); // Usuario registrado
+      const { data } = await register({ username, password }); // <-- desestructura data
+      console.log(data.message);
       alert("Usuario registrado correctamente!");
-      // Aquí puedes redirigir al login si quieres
+      // redirigir a login si quieres
     } catch (err) {
-      console.error(err.response.data.detail);
-      alert(`Error: ${err.response.data.detail}`);
+      if (err.response && err.response.data) {
+        // error enviado desde el backend
+        console.error(err.response.data.detail);
+        alert(`Error: ${err.response.data.detail}`);
+      } else {
+        // error sin respuesta (servidor no disponible, CORS, etc.)
+        console.error("Error sin respuesta del servidor:", err.message || err);
+        alert("Error: no se pudo conectar con el servidor");
+      }
     }
   };
 
