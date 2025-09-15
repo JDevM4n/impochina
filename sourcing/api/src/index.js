@@ -19,7 +19,6 @@ async function connectRabbit() {
 
 app.get("/health", (_, res) => res.json({ ok: true, service: "sourcing-api" }));
 
-// Simula crear una solicitud de compra y encola un job de scraping
 app.post("/purchase-requests", async (req, res) => {
   try {
     const { urls = [] } = req.body || {};
