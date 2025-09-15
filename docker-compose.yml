@@ -46,7 +46,7 @@ services:
     networks: [impochina_net]
 
   browserless:
-    image: browserless/chromium:latest
+    image: browserless/chrome:latest
     container_name: impo-browser
     restart: unless-stopped
     environment:
