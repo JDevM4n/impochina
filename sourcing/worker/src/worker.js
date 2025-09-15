@@ -1,7 +1,7 @@
 import amqp from "amqplib";
 
 const RABBIT_URL = process.env.RABBIT_URL;
-const BROWSER_WS = process.env.BROWSER_WS;
+const BROWSER_WS = process.env.BROWSER_WS; // por ahora solo lo mostramos
 
 async function main() {
   console.log("[worker] starting...");
@@ -14,12 +14,10 @@ async function main() {
   ch.prefetch(1);
 
   ch.consume("scrape.product.requested", async (msg) => {
-    const content = msg.content.toString();
-    const job = JSON.parse(content);
+    const job = JSON.parse(msg.content.toString());
     console.log("[worker] received job:", job);
 
-    // TODO: Conectarse a Browserless (Puppeteer/Playwright) y scrapear de verdad.
-    // Por ahora, sólo simulamos procesamiento:
+    // Simulación de trabajo (aquí luego irá Playwright/Puppeteer)
     await new Promise((r) => setTimeout(r, 1500));
     console.log("[worker] done (simulado) for requestId:", job.requestId);
 
