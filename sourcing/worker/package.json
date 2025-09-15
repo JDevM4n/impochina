@@ -1,0 +1,13 @@
+{
+  "name": "sourcing-worker",
+  "version": "0.1.0",
+  "main": "src/worker.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/worker.js"
+  },
+  "dependencies": {
+    "amqplib": "^0.10.3",
+    "node-fetch": "^3.3.2"
+  }
+}
