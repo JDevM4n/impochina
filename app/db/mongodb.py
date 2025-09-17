@@ -1,14 +1,16 @@
+# app/db/mongodb.py
 from motor.motor_asyncio import AsyncIOMotorClient
-from bson import ObjectId
+import os
 
-MONGO_URL = "mongodb://localhost:27017"
-DB_NAME = "erpCompras"
+MONGO_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
+DB_NAME = os.getenv("MONGODB_DB", "erpCompras")
 
-client = AsyncIOMotorClient(MONGO_URL)
+client = AsyncIOMotorClient(MONGO_URI)
 db = client[DB_NAME]
 
-# Para serializar ObjectId
-def serialize_doc(doc):
+def serialize_doc(doc: dict) -> dict:
+    if not doc:
+        return doc
     doc["id"] = str(doc["_id"])
-    del doc["_id"]
+    doc.pop("_id", None)
     return doc

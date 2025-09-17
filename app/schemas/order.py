@@ -1,11 +1,11 @@
-from pydantic import BaseModel
+# app/schemas/order.py
+from pydantic import BaseModel, HttpUrl
 from typing import Optional
 
-class Order(BaseModel):
+class OrderCreate(BaseModel):
     usuario: str
     producto: str
     direccion: str
-    imagen: str
+    imagen: Optional[HttpUrl] = None
     peso: float
     costo_envio: float
-    estado: Optional[str] = "pendiente"

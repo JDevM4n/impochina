@@ -1,15 +1,29 @@
-from fastapi import APIRouter, HTTPException
-from app.db.models import Pedido
-from app.services import warehouse_service
+# app/api/routes/warehouse.py
+from fastapi import APIRouter, Query, HTTPException
+from app.schemas.order import OrderCreate
+from app.services.warehouse_service import create_order_doc, get_orders_by_usuario
 
 router = APIRouter()
 
-@router.post("/pedido")
-async def crear_pedido(pedido: Pedido):
-    nuevo = await warehouse_service.guardar_pedido(pedido)
-    return {"message": "Pedido guardado", "pedido": nuevo}
+@router.get("/calculate-shipping")
+async def calculate_shipping(weight: float = Query(..., description="Peso en kg")):
+    tarifa_por_kg = 5.0
+    price = weight * tarifa_por_kg
+    if price < 2.0:
+        price = 2.0
+    return {"price": round(price, 2)}
 
-@router.get("/pedidos")
-async def obtener_pedidos():
-    pedidos = await warehouse_service.listar_pedidos()
-    return pedidos
+@router.post("/create-order")
+async def create_order(payload: OrderCreate):
+    payload_dict = payload.dict()
+    # status / timestamps opcionales
+    payload_dict.setdefault("estado", "pendiente")
+    result = await create_order_doc(payload_dict)
+    return {"mensaje": "Pedido creado", "pedido": result}
+
+@router.get("/pending-orders/{usuario}")
+async def pending_orders(usuario: str):
+    items = await get_orders_by_usuario(usuario)
+    if not items:
+        return {"pedidos": []}
+    return {"pedidos": items}

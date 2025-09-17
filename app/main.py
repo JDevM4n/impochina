@@ -1,14 +1,14 @@
 # app/main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.routes import notifications, warehouse
+from app.api.routes import warehouse, notifications  # notifications si lo tienes
 
 app = FastAPI(title="Microservice 2 - Impochina")
 
-# CORS (permite a tu frontend correr en otro puerto)
+# CORS: permite al front (localhost) conectarse. En producción restringe.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # en prod limita a tu dominio
+    allow_origins=["http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -19,4 +19,4 @@ app.include_router(warehouse.router, prefix="/warehouse", tags=["Warehouse"])
 
 @app.get("/")
 def root():
-    return {"message": "Microservice 2 is running in Docker 🚀"}
+    return {"message": "Microservice 2 is running 🚀"}

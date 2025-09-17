@@ -1,14 +1,16 @@
+# app/services/warehouse_service.py
 from app.db.mongodb import db, serialize_doc
-from app.db.models import Pedido
+from typing import List
+from bson.objectid import ObjectId
 
-async def guardar_pedido(pedido: Pedido):
-    pedido_dict = pedido.dict()
-    result = await db["pedidos"].insert_one(pedido_dict)
-    pedido_dict["_id"] = result.inserted_id
-    return serialize_doc(pedido_dict)
+async def create_order_doc(doc: dict) -> dict:
+    res = await db.pedidos.insert_one(doc)
+    new = await db.pedidos.find_one({"_id": res.inserted_id})
+    return serialize_doc(new)
 
-async def listar_pedidos():
-    pedidos = []
-    async for p in db["pedidos"].find():
-        pedidos.append(serialize_doc(p))
-    return pedidos
+async def get_orders_by_usuario(usuario: str) -> List[dict]:
+    cursor = db.pedidos.find({"usuario": usuario})
+    items = []
+    async for d in cursor:
+        items.append(serialize_doc(d))
+    return items
