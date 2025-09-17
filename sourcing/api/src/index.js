@@ -24,7 +24,7 @@ async function connectRabbit() {
   channel = await conn.createChannel();
   await channel.assertQueue("scrape.product.requested", { durable: true });
 
-  // Consumidor para simular el worker dentro de la API
+  // Consumidor para simular el worker dentro de la API (placeholder)
   await channel.consume(
     "scrape.product.requested",
     async (msg) => {
@@ -32,30 +32,28 @@ async function connectRabbit() {
         const payload = JSON.parse(msg.content.toString());
         const { requestId, urls = [] } = payload;
 
-        // Marcar IN_PROGRESS
+        // IN_PROGRESS
         updateStatus(requestId, Status.IN_PROGRESS, { message: "Procesando..." });
 
-        // Simulación de trabajo (1s). Aquí luego irá tu scraper real.
+        // Simulación de trabajo (1s). Aquí irá tu scraper real.
         setTimeout(() => {
-  const items = urls.map((url, idx) => ({
-    url,
-    title: `Mock item ${idx + 1}`,
-    price: 0,
-    currency: "CNY",
-  }));
+          const items = urls.map((url, idx) => ({
+            url,
+            title: `Mock item ${idx + 1}`,
+            price: 0,
+            currency: "CNY",
+          }));
 
-  // 👇 LOG para ver que sí guardamos resultados
-  console.log(`[api] setResults -> requestId=${requestId} items=${items.length}`);
+          console.log(`[api] setResults -> requestId=${requestId} items=${items.length}`);
 
-  setResults(requestId, items);
-  updateStatus(requestId, Status.COMPLETED, {
-    message: `Procesadas ${urls.length} URL(s)`,
-  });
+          // Guardar resultados y cerrar como COMPLETED
+          setResults(requestId, items);
+          updateStatus(requestId, Status.COMPLETED, {
+            message: `Procesadas ${urls.length} URL(s)`,
+          });
 
-  channel.ack(msg);
-}, 1000);
-
-
+          channel.ack(msg);
+        }, 1000);
       } catch (err) {
         console.error("[api] Consumer error:", err?.message);
         channel.nack(msg, false, false); // descartar para no quedar en loop
@@ -67,7 +65,7 @@ async function connectRabbit() {
   console.log("[api] Consumer attached to scrape.product.requested");
   console.log("[api] Connected to RabbitMQ");
 
-  // Si se cae Rabbit, salir para que el orquestador reinicie
+  // Resiliencia básica
   conn.on("close", () => {
     console.error("[api] Rabbit connection closed");
     process.exit(1);
@@ -78,10 +76,12 @@ async function connectRabbit() {
   });
 }
 
+// Health
 app.get("/health", (_, res) =>
   res.json({ ok: true, service: "sourcing-api" })
 );
 
+// Crear solicitud
 app.post("/purchase-requests", async (req, res) => {
   try {
     const { urls = [] } = req.body ?? {};
@@ -95,17 +95,17 @@ app.post("/purchase-requests", async (req, res) => {
     const requestId = uuidv4();
     const payload = { requestId, urls, ts: Date.now() };
 
-    // 1) Estado inicial en memoria
+    // Estado inicial
     initPending(requestId, "Scrape job encolado");
 
-    // 2) Enviar a la cola
+    // Encolar
     channel.sendToQueue(
       "scrape.product.requested",
       Buffer.from(JSON.stringify(payload)),
       { persistent: true }
     );
 
-    // 3) Responder
+    // Respuesta
     return res.status(202).json({
       requestId,
       status: Status.PENDING,
@@ -117,7 +117,7 @@ app.post("/purchase-requests", async (req, res) => {
   }
 });
 
-// Estado del request
+// Estado público del request
 app.get("/purchase-requests/:id", (req, res) => {
   const { id } = req.params;
   const state = getStatus(id);
@@ -127,11 +127,51 @@ app.get("/purchase-requests/:id", (req, res) => {
   return res.json(state);
 });
 
-// Resultados del request
+// Resultados públicos del request
 app.get("/purchase-requests/:id/results", (req, res) => {
   const { id } = req.params;
   const items = getResults(id);
   return res.json({ requestId: id, count: items.length, items });
+});
+
+// =========================
+// Endpoints internos (para el worker separado)
+// =========================
+
+// Actualizar estado (INTERNAL)
+app.post("/internal/purchase-requests/:id/status", (req, res) => {
+  const { id } = req.params;
+  const { status, message, error } = req.body ?? {};
+
+  const allowed = new Set(Object.values(Status));
+  if (!allowed.has(status)) {
+    return res.status(400).json({ error: "invalid_status", allowed: [...allowed] });
+  }
+
+  const current = getStatus(id);
+  if (!current) {
+    return res.status(404).json({ error: `purchase-request ${id} not found` });
+  }
+
+  const updated = updateStatus(id, status, { message, error });
+  return res.json(updated);
+});
+
+// Guardar resultados (INTERNAL)
+app.post("/internal/purchase-requests/:id/results", (req, res) => {
+  const { id } = req.params;
+  const { items } = req.body ?? {};
+  if (!Array.isArray(items)) {
+    return res.status(400).json({ error: "items_must_be_array" });
+  }
+
+  const current = getStatus(id);
+  if (!current) {
+    return res.status(404).json({ error: `purchase-request ${id} not found` });
+  }
+
+  setResults(id, items);
+  return res.json({ requestId: id, saved: items.length });
 });
 
 app.listen(PORT, async () => {
