@@ -1,8 +1,20 @@
 from motor.motor_asyncio import AsyncIOMotorClient
-from app.core.config import MONGODB_URI, MONGO_DB_NAME
+from bson.objectid import ObjectId
 
-client = AsyncIOMotorClient(MONGODB_URI)
-db = client[MONGO_DB_NAME]
+MONGO_URL = "mongodb://localhost:27017"
+client = AsyncIOMotorClient(MONGO_URL)
+db = client.impochina_db
+orders_collection = db.orders
 
-def get_database():
-    return db
+def order_serializer(order) -> dict:
+    return {
+        "id": str(order["_id"]),
+        "usuario": order["usuario"],
+        "producto": order["producto"],
+        "direccion": order["direccion"],
+        "imagen": order["imagen"],
+        "peso": order["peso"],
+        "costo_envio": order["costo_envio"],
+        "estado": order.get("estado", "pendiente")
+    }
+
