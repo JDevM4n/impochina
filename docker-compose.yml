@@ -1,25 +1,24 @@
-version: "3.9"
+
 services:
-  mongo:
-    image: mongo:5.0
-    container_name: mongo
-    restart: always
+  microservice2:
+    build: .
+    container_name: microservice2
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      - mongodb
+
+  mongodb:
+    image: mongo:6.0
+    container_name: mongodb
     ports:
       - "27017:27017"
     volumes:
       - mongo_data:/data/db
 
-  warehouse:
-    build: ./warehouse  # carpeta donde está tu Dockerfile
-    container_name: warehouse
-    restart: always
-    ports:
-      - "8001:8001"   # puerto del warehouse service
-    depends_on:
-      - mongo
-    environment:
-      - MONGO_URL=mongodb://mongo:27017
-      - MONGO_DB=warehouse_db
-
 volumes:
   mongo_data:
+
+ 
