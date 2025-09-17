@@ -1,29 +1,26 @@
-# app/api/routes/warehouse.py
-from fastapi import APIRouter, Query, HTTPException
-from app.schemas.order import OrderCreate
-from app.services.warehouse_service import create_order_doc, get_orders_by_usuario
+import os
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from pymongo import MongoClient
 
-router = APIRouter()
+MONGO_URL = os.getenv("MONGO_URL", "mongodb://mongo:27017")
+MONGO_DB = os.getenv("MONGO_DB", "warehouse_db")
 
-@router.get("/calculate-shipping")
-async def calculate_shipping(weight: float = Query(..., description="Peso en kg")):
-    tarifa_por_kg = 5.0
-    price = weight * tarifa_por_kg
-    if price < 2.0:
-        price = 2.0
-    return {"price": round(price, 2)}
+client = MongoClient(MONGO_URL)
+db = client[MONGO_DB]
 
-@router.post("/create-order")
-async def create_order(payload: OrderCreate):
-    payload_dict = payload.dict()
-    # status / timestamps opcionales
-    payload_dict.setdefault("estado", "pendiente")
-    result = await create_order_doc(payload_dict)
-    return {"mensaje": "Pedido creado", "pedido": result}
+app = FastAPI()
 
-@router.get("/pending-orders/{usuario}")
-async def pending_orders(usuario: str):
-    items = await get_orders_by_usuario(usuario)
-    if not items:
-        return {"pedidos": []}
-    return {"pedidos": items}
+class OrderCreate(BaseModel):
+    usuario: str
+    producto: str
+    cantidad: int
+
+@app.post("/warehouse/create-order")
+def create_order(order: OrderCreate):
+    try:
+        order_dict = order.dict()
+        result = db.orders.insert_one(order_dict)
+        return {"message": "Pedido creado", "id": str(result.inserted_id)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
