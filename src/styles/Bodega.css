@@ -1,0 +1,163 @@
+/* Layout general */
+.bodega-container {
+  font-family: 'Poppins', sans-serif;
+  background: #f8f9fc;
+  min-height: 100vh;
+  padding: 20px 40px;
+  color: #333;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+.bodega-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 30px;
+  background: #2563eb;
+  color: white;
+  border-radius: 8px;
+}
+
+.bodega-header h1 {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.bodega-header a {
+  color: white;
+  text-decoration: none;
+  font-weight: 500;
+  background: #1e40af;
+  padding: 8px 14px;
+  border-radius: 6px;
+  transition: 0.3s;
+}
+
+.bodega-header a:hover {
+  background: #1e3a8a;
+}
+
+/* Lista de productos */
+.bodega-list {
+  margin-top: 40px;
+}
+
+.bodega-list h2 {
+  font-size: 26px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 20px;
+}
+
+/* Grid de productos */
+.bodega-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 20px;
+}
+
+.bodega-card {
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0px 4px 8px rgba(0,0,0,0.1);
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+.bodega-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0px 6px 12px rgba(0,0,0,0.15);
+}
+
+.bodega-card.selected {
+  border: 2px solid #22c55e;
+  background: #ecfdf5;
+}
+
+.bodega-card h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.bodega-card p {
+  margin: 5px 0;
+  font-size: 14px;
+  color: #475569;
+}
+
+/* Calculadora de envío */
+.bodega-calculadora {
+  margin-top: 50px;
+  padding: 30px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0px 4px 8px rgba(0,0,0,0.1);
+}
+
+.bodega-calculadora h2 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 15px;
+}
+
+.bodega-calculadora button {
+  padding: 12px 20px;
+  background: #2563eb;
+  color: white;
+  font-weight: bold;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+.bodega-calculadora button:hover {
+  background: #1e40af;
+}
+
+.bodega-calculadora p {
+  margin-top: 15px;
+  font-size: 16px;
+  color: #334155;
+}
+
+/* Acciones finales */
+.acciones {
+  margin-top: 20px;
+  display: flex;
+  gap: 15px;
+}
+
+.acciones button {
+  flex: 1;
+  padding: 14px;
+  border: none;
+  border-radius: 8px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+.acciones button:first-child {
+  background: #22c55e;
+  color: white;
+}
+
+.acciones button:first-child:hover {
+  background: #16a34a;
+}
+
+.acciones button:last-child {
+  background: #f1f5f9;
+  color: #1e293b;
+  border: 1px solid #cbd5e1;
+}
+
+.acciones button:last-child:hover {
+  background: #e2e8f0;
+}

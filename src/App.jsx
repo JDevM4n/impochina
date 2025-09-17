@@ -1,26 +1,23 @@
-import React, { useState } from "react";
+// src/App.jsx
+import React from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import HomePage from "./pages/HomePage";
+import BodegaPage from "./pages/BodegaPage";
 
-export default function App() {
-  const [user, setUser] = useState(null);
-  const [showRegister, setShowRegister] = useState(false);
-
+function App() {
   return (
-    <div>
-      {!user ? (
-        showRegister ? (
-          <RegisterPage onRegister={() => setShowRegister(false)} />
-        ) : (
-          <LoginPage
-            onLogin={setUser}
-            onRegisterClick={() => setShowRegister(true)}
-          />
-        )
-      ) : (
-        <HomePage username={user} />
-      )}
-    </div>
+    <Router>
+      <Routes>
+        <Route path="/" element={<Navigate to="/login" />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/HomePage" element={<HomePage />} />
+        <Route path="/BodegaPage" element={<BodegaPage />} />
+      </Routes>
+    </Router>
   );
 }
+
+export default App;

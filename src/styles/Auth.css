@@ -1,0 +1,104 @@
+/* Contenedor general */
+.auth-container {
+  display: flex;
+  height: 100vh;
+  font-family: "Arial", sans-serif;
+}
+
+/* Columna izquierda */
+.auth-left {
+  flex: 1;
+  background: #f6f7fb;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+
+.logo {
+  font-size: 20px;
+  font-weight: bold;
+  margin-bottom: 20px;
+}
+
+.illustration img {
+  max-width: 80%;
+}
+
+/* Columna derecha */
+.auth-right {
+  flex: 1;
+  background: #3b82f6; /* azul tipo Tailwind */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Caja de login */
+.auth-box {
+  background: white;
+  padding: 40px;
+  border-radius: 12px;
+  width: 350px;
+  text-align: center;
+}
+
+.auth-box h2 {
+  margin-bottom: 20px;
+  color: #111;
+}
+
+/* Inputs con íconos */
+.input-group {
+  display: flex;
+  align-items: center;
+  margin: 12px 0;
+  background: #f0f0f0;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.input-group .icon {
+  margin-right: 8px;
+  font-size: 18px;
+}
+
+.input-group input {
+  border: none;
+  outline: none;
+  background: transparent;
+  flex: 1;
+  font-size: 14px;
+}
+
+/* Botón */
+.login-btn {
+  margin-top: 20px;
+  width: 100%;
+  padding: 12px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+.login-btn:hover {
+  background: #2563eb;
+}
+
+/* Link */
+.forgot-link {
+  display: block;
+  margin-top: 12px;
+  font-size: 14px;
+  color: #3b82f6;
+  text-decoration: none;
+}
+
+.forgot-link:hover {
+  text-decoration: underline;
+}
