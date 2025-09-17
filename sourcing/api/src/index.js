@@ -2,7 +2,14 @@
 import express from "express";
 import { v4 as uuidv4 } from "uuid";
 import amqp from "amqplib";
-import { initPending, Status } from "./state.js"; // ← usamos tu store en memoria
+import {
+  initPending,
+  getStatus,
+  updateStatus,
+  Status,
+  setResults,
+  getResults,
+} from "./state.js";
 
 const app = express();
 app.use(express.json());
@@ -16,9 +23,51 @@ async function connectRabbit() {
   const conn = await amqp.connect(RABBIT_URL);
   channel = await conn.createChannel();
   await channel.assertQueue("scrape.product.requested", { durable: true });
+
+  // Consumidor para simular el worker dentro de la API
+  await channel.consume(
+    "scrape.product.requested",
+    async (msg) => {
+      try {
+        const payload = JSON.parse(msg.content.toString());
+        const { requestId, urls = [] } = payload;
+
+        // Marcar IN_PROGRESS
+        updateStatus(requestId, Status.IN_PROGRESS, { message: "Procesando..." });
+
+        // Simulación de trabajo (1s). Aquí luego irá tu scraper real.
+        setTimeout(() => {
+  const items = urls.map((url, idx) => ({
+    url,
+    title: `Mock item ${idx + 1}`,
+    price: 0,
+    currency: "CNY",
+  }));
+
+  // 👇 LOG para ver que sí guardamos resultados
+  console.log(`[api] setResults -> requestId=${requestId} items=${items.length}`);
+
+  setResults(requestId, items);
+  updateStatus(requestId, Status.COMPLETED, {
+    message: `Procesadas ${urls.length} URL(s)`,
+  });
+
+  channel.ack(msg);
+}, 1000);
+
+
+      } catch (err) {
+        console.error("[api] Consumer error:", err?.message);
+        channel.nack(msg, false, false); // descartar para no quedar en loop
+      }
+    },
+    { noAck: false }
+  );
+
+  console.log("[api] Consumer attached to scrape.product.requested");
   console.log("[api] Connected to RabbitMQ");
 
-  // Opcional: si se cae Rabbit, salimos para que el orquestador reinicie el contenedor
+  // Si se cae Rabbit, salir para que el orquestador reinicie
   conn.on("close", () => {
     console.error("[api] Rabbit connection closed");
     process.exit(1);
@@ -46,7 +95,7 @@ app.post("/purchase-requests", async (req, res) => {
     const requestId = uuidv4();
     const payload = { requestId, urls, ts: Date.now() };
 
-    // 1) Registrar estado inicial en memoria (PENDING)
+    // 1) Estado inicial en memoria
     initPending(requestId, "Scrape job encolado");
 
     // 2) Enviar a la cola
@@ -66,6 +115,23 @@ app.post("/purchase-requests", async (req, res) => {
     console.error(e);
     res.status(500).json({ error: "internal_error" });
   }
+});
+
+// Estado del request
+app.get("/purchase-requests/:id", (req, res) => {
+  const { id } = req.params;
+  const state = getStatus(id);
+  if (!state) {
+    return res.status(404).json({ error: `purchase-request ${id} not found` });
+  }
+  return res.json(state);
+});
+
+// Resultados del request
+app.get("/purchase-requests/:id/results", (req, res) => {
+  const { id } = req.params;
+  const items = getResults(id);
+  return res.json({ requestId: id, count: items.length, items });
 });
 
 app.listen(PORT, async () => {
