@@ -1,10 +1,11 @@
-# auth_service/app/api/routes/auth.py
+# ... el resto de tu archivo se queda igual ...
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from app.db import users_collection
 from passlib.hash import bcrypt
 import jwt
 import os
+import time  # <- nuevo
 
 router = APIRouter()
 
@@ -14,7 +15,6 @@ class User(BaseModel):
     username: str
     password: str
 
-# Registro
 @router.post("/register")
 def register(user: User):
     if users_collection.find_one({"username": user.username}):
@@ -23,11 +23,16 @@ def register(user: User):
     users_collection.insert_one({"username": user.username, "password": hashed})
     return {"message": "User registered successfully"}
 
-# Login
 @router.post("/login")
 def login(user: User):
     db_user = users_collection.find_one({"username": user.username})
     if not db_user or not bcrypt.verify(user.password, db_user["password"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    token = jwt.encode({"username": user.username}, SECRET_KEY)
+
+    # ⬇️ Cambios mínimos: exp + algorithm HS256
+    payload = {
+        "username": user.username,       # será nuestro "sub" lógico
+        "exp": int(time.time()) + 8*3600 # expira en 8 horas
+    }
+    token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
     return {"access_token": token}
