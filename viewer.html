@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Impochina | Demo Scraper</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+    body { margin: 24px; color: #111; }
+    h1 { margin: 0 0 8px; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+    .row > * { flex: 1 1 260px; min-width: 220px; }
+    textarea { width: 100%; min-height: 90px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+    input, button, textarea { padding: 10px; border: 1px solid #ddd; border-radius: 10px; }
+    button { cursor: pointer; background: #111; color: #fff; font-weight: 600; }
+    button.secondary { background: #f3f3f3; color: #111; }
+    .status { padding: 10px 12px; background: #f7f7f7; border-radius: 10px; white-space: pre-wrap; line-height: 1.4; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; margin-top: 14px; }
+    .card { border: 1px solid #eee; border-radius: 16px; overflow: hidden; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+    .thumb { width: 100%; aspect-ratio: 1/1; object-fit: cover; background: #fafafa; display: block; }
+    .card-body { padding: 10px 12px; }
+    .title { font-size: 14px; font-weight: 600; line-height: 1.3; margin: 0 0 6px; height: 2.6em; overflow: hidden; }
+    .meta { font-size: 13px; color: #444; display: flex; gap: 8px; align-items: baseline; }
+    .price { font-size: 16px; font-weight: 700; }
+    .idline { font-family: ui-monospace, monospace; font-size: 12px; color: #555; display:flex; align-items:center; gap:8px; }
+    .muted { color: #777; }
+    .error { color: #b00020; }
+    a { color: #0b6bf2; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <h1>Impochina — Demo Scraper</h1>
+
+  <div class="row">
+    <div>
+      <label>API base</label>
+      <input id="apiBase" value="http://127.0.0.1:3301" />
+    </div>
+    <div>
+      <label>Request ID</label>
+      <div style="display:flex; gap:8px">
+        <input id="reqId" placeholder="(se llenará al crear la solicitud)" />
+        <button id="btnCopyLink" class="secondary">Copiar link</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div style="flex:2">
+      <label>URLs (una por línea)</label>
+      <textarea id="urls"></textarea>
+      <div class="muted">Ej. pega tu URL de <code>huodong.taobao.com</code> o productos directos.</div>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:8px; justify-content:flex-end">
+      <button id="btnCreate">Crear solicitud</button>
+      <button id="btnFetch" class="secondary">Ver por Request ID</button>
+    </div>
+  </div>
+
+  <div class="idline">
+    requestId: <span id="rid">—</span>
+    <a id="deeplink" class="muted" target="_blank" style="display:none;">Abrir link</a>
+  </div>
+  <div id="status" class="status">Estado: —</div>
+
+  <h3 style="margin-top:18px">Resultados</h3>
+  <div id="grid" class="grid"></div>
+
+  <script>
+    const $ = (s) => document.querySelector(s);
+    const apiBase = () => $('#apiBase').value.replace(/\/+$/, '');
+
+    function renderStatus(s) {
+      $('#status').textContent = typeof s === 'string' ? s : JSON.stringify(s, null, 2);
+    }
+
+    function renderItems(items = []) {
+      const grid = $('#grid');
+      grid.innerHTML = '';
+      if (!items.length) {
+        grid.innerHTML = '<div class="muted">Sin items.</div>';
+        return;
+      }
+      for (const it of items) {
+        const img = it.image || '';
+        const title = it.title || '(sin título)';
+        const price = (it.price != null) ? it.price : '—';
+        const currency = it.currency || '';
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          <a href="${it.url}" target="_blank" rel="noopener">
+            <img class="thumb" src="${img}" onerror="this.src=''; this.style.background='#f0f0f0'" alt="">
+          </a>
+          <div class="card-body">
+            <div class="title" title="${title}">${title}</div>
+            <div class="meta">
+              <span class="price">${price}</span>
+              <span class="muted">${currency}</span>
+            </div>
+            <div class="muted" style="margin-top:6px"><a href="${it.url}" target="_blank">Ver producto</a></div>
+          </div>
+        `;
+        grid.appendChild(card);
+      }
+    }
+
+    // ---------- Deep link helpers ----------
+    function buildDeepLink(id) {
+      const url = new URL(location.href);
+      url.searchParams.set('api', $('#apiBase').value.trim());
+      url.searchParams.set('id', id.trim());
+      return url.toString();
+    }
+
+    function updateDeepLink(id) {
+      const a = $('#deeplink');
+      if (id) {
+        a.href = buildDeepLink(id);
+        a.style.display = 'inline';
+        a.textContent = 'Abrir link';
+      } else {
+        a.style.display = 'none';
+      }
+    }
+
+    async function copyDeepLink() {
+      const id = $('#reqId').value.trim();
+      if (!id) { alert('No hay Request ID aún'); return; }
+      const link = buildDeepLink(id);
+      try { await navigator.clipboard.writeText(link); } catch {}
+      renderStatus('Link copiado al portapapeles ✅');
+    }
+
+    // ---------- Robust fetch de resultados ----------
+    async function fetchResultsWithRetry(id, tries = 8, waitMs = 1000) {
+      for (let i = 0; i < tries; i++) {
+        try {
+          const rs = await fetch(apiBase() + '/purchase-requests/' + id + '/results').then(r => r.json());
+          if (rs && Array.isArray(rs.items) && rs.items.length > 0) {
+            return rs; // ✅ ya hay items
+          }
+        } catch {}
+        await new Promise(r => setTimeout(r, waitMs));
+      }
+      // Último intento, devolvemos lo que haya
+      try { return await fetch(apiBase() + '/purchase-requests/' + id + '/results').then(r => r.json()); }
+      catch { return { items: [], count: 0 }; }
+    }
+
+    // ---------- Flujos ----------
+    async function createRequest() {
+      const lines = $('#urls').value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+      if (!lines.length) {
+        alert('Pega al menos 1 URL');
+        return;
+      }
+      renderStatus('Creando solicitud…');
+      const res = await fetch(apiBase() + '/purchase-requests', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ urls: lines })
+      });
+      if (!res.ok) {
+        renderStatus('Error al crear: ' + res.status);
+        return;
+      }
+      const json = await res.json();
+      $('#reqId').value = json.requestId;
+      $('#rid').textContent = json.requestId;
+      updateDeepLink(json.requestId);
+      pollStatus(json.requestId);
+    }
+
+    async function pollStatus(id) {
+      renderStatus('Consultando estado…');
+      renderItems([]);
+      $('#rid').textContent = id;
+      updateDeepLink(id);
+
+      const maxTries = 20;
+      for (let i = 0; i < maxTries; i++) {
+        const st = await fetch(apiBase() + '/purchase-requests/' + id).then(r => r.json()).catch(() => null);
+        if (st) renderStatus(st);
+        if (st && (st.status === 'COMPLETED' || st.status === 'FAILED')) break;
+        await new Promise(r => setTimeout(r, 1500));
+      }
+
+      // Reintento de resultados (antibalas)
+      const rs = await fetchResultsWithRetry(id, 8, 1000);
+      renderItems(rs?.items || []);
+    }
+
+    async function fetchById() {
+      const id = $('#reqId').value.trim();
+      if (!id) { alert('Escribe un Request ID'); return; }
+      $('#rid').textContent = id;
+      updateDeepLink(id);
+      await pollStatus(id);
+    }
+
+    // Prefill con tu huodong de ejemplo
+    $('#urls').value = 'https://huodong.taobao.com/wow/a/act/tao/dailygroup/23509/24308/wupr?spm=a21bo.jianhua/a.yingxiao.d1_1.5af92a89XUqyBp&wh_pid=daily-554070&itemId=574575426373%2C642099861838%2C640341374829%2C545428572834&custom_content_source=608.29877528';
+
+    // Listeners
+    $('#btnCreate').onclick = createRequest;
+    $('#btnFetch').onclick = fetchById;
+    $('#btnCopyLink').onclick = copyDeepLink;
+
+    // Lee query params al cargar (autopoll)
+    (function readQueryParams() {
+      const params = new URLSearchParams(location.search);
+      const api = params.get('api');
+      const id  = params.get('id');
+      if (api) $('#apiBase').value = api;
+      if (id) {
+        $('#reqId').value = id;
+        $('#rid').textContent = id;
+        updateDeepLink(id);
+        pollStatus(id);
+      }
+    })();
+  </script>
+</body>
+</html>
