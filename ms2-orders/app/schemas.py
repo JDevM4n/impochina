@@ -10,7 +10,7 @@ class OrderCreate(BaseModel):
 class OrderOut(BaseModel):
     id: str
     userId: str
-    userEmail: Optional[str] = None
+    userEmail: Optional[str] = None   # seguirá siendo opcional (no lo usaremos)
     productName: str
     quantity: int
     shippingPrice: float
