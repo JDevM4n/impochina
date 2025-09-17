@@ -1,108 +1,157 @@
-import React, { useState, useEffect } from "react";
-import { getPendingOrders, calculateShipping, createOrder } from "../api/Service2";
+import React, { useEffect, useState } from "react";
+import { getHealth, createOrder, getMyOrders } from "../api/Service2";
 
-function BodegaPage() {
-  const [usuario] = useState("usuario_demo"); // en producción debería venir del login
-  const [pedidos, setPedidos] = useState([]);
-  const [peso, setPeso] = useState("");
-  const [precio, setPrecio] = useState(null);
-  const [producto, setProducto] = useState("");
-  const [direccion, setDireccion] = useState("");
-  const [imagen, setImagen] = useState("");
+export default function BodegaPage() {
+  const [health, setHealth] = useState(null);
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const [err, setErr] = useState(null);
 
-  // 🔹 Cargar pedidos pendientes al iniciar
+  const [form, setForm] = useState({
+    productName: "",
+    quantity: 1,
+    shippingPrice: 0
+  });
+
+  async function load() {
+    setErr(null);
+    try {
+      const h = await getHealth();
+      setHealth(h);
+      const list = await getMyOrders();
+      setOrders(list);
+    } catch (e) {
+      setErr(e.message || "Error cargando datos");
+    }
+  }
+
   useEffect(() => {
-    getPendingOrders(usuario).then((data) => setPedidos(data.pedidos || []));
-  }, [usuario]);
+    load();
+  }, []);
 
-  // 🔹 Calcular envío
-  const handleCalcular = async () => {
-    if (!peso) {
-      alert("Por favor ingresa el peso");
-      return;
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setMsg(null);
+    setErr(null);
+    try {
+      const payload = {
+        productName: form.productName,
+        quantity: Number(form.quantity),
+        shippingPrice: Number(form.shippingPrice),
+      };
+      const created = await createOrder(payload);
+      setMsg(`Pedido creado: ${created.id}`);
+      setForm({ productName: "", quantity: 1, shippingPrice: 0 });
+      const list = await getMyOrders();
+      setOrders(list);
+    } catch (e) {
+      setErr(e.message || "Error creando pedido");
+    } finally {
+      setLoading(false);
     }
-    const data = await calculateShipping(peso);
-    setPrecio(data.price);
-  };
-
-  // 🔹 Crear pedido
-  const handleCrearPedido = async () => {
-    if (!producto || !direccion || !peso) {
-      alert("Completa todos los campos");
-      return;
-    }
-
-    const pedido = {
-      usuario,
-      producto,
-      direccion,
-      imagen,
-      peso: parseFloat(peso),
-      costo_envio: precio || 0,
-    };
-
-    const data = await createOrder(pedido);
-    alert(data.mensaje);
-
-    // actualizar lista
-    const refreshed = await getPendingOrders(usuario);
-    setPedidos(refreshed.pedidos || []);
   };
 
   return (
-    <div style={{ padding: "20px" }}>
-      <h1>📦 Bodega</h1>
+    <div style={styles.container}>
+      <h2 style={styles.title}>BodegaPage</h2>
+      <p style={{marginTop: 4, opacity: 0.8}}>MS2 → Mongo</p>
 
-      <div style={{ marginBottom: "20px" }}>
-        <h2>Nuevo pedido</h2>
-        <input
-          type="text"
-          placeholder="Producto"
-          value={producto}
-          onChange={(e) => setProducto(e.target.value)}
-        />
-        <br />
-        <input
-          type="text"
-          placeholder="Dirección"
-          value={direccion}
-          onChange={(e) => setDireccion(e.target.value)}
-        />
-        <br />
-        <input
-          type="text"
-          placeholder="URL Imagen"
-          value={imagen}
-          onChange={(e) => setImagen(e.target.value)}
-        />
-        <br />
-        <input
-          type="number"
-          placeholder="Peso en kg"
-          value={peso}
-          onChange={(e) => setPeso(e.target.value)}
-        />
-        <br />
-        <button onClick={handleCalcular}>Calcular envío</button>
-        {precio && <p>💰 Precio estimado: ${precio}</p>}
-        <br />
-        <button onClick={handleCrearPedido}>Crear pedido</button>
-      </div>
+      <section style={styles.card}>
+        <div style={{display: "flex", justifyContent: "space-between"}}>
+          <strong>Estado del backend</strong>
+          <button onClick={load} style={styles.secondaryBtn}>Refrescar</button>
+        </div>
+        <pre style={styles.pre}>
+          {health ? JSON.stringify(health, null, 2) : "—"}
+        </pre>
+      </section>
 
-      <h2>Pedidos pendientes</h2>
-      <ul>
-        {pedidos.length > 0 ? (
-          pedidos.map((p) => (
-            <li key={p.id}>
-              {p.producto} - {p.direccion} - {p.peso}kg - ${p.costo_envio}
-            </li>
-          ))
+      <section style={styles.card}>
+        <h3 style={{marginTop: 0}}>Crear pedido</h3>
+
+        <form onSubmit={onSubmit} style={styles.form}>
+          <label style={styles.label}>
+            Nombre del producto
+            <input
+              style={styles.input}
+              type="text"
+              required
+              value={form.productName}
+              placeholder="Ej: Teclado mecánico"
+              onChange={(e) => setForm({ ...form, productName: e.target.value })}
+            />
+          </label>
+
+          <label style={styles.label}>
+            Cantidad
+            <input
+              style={styles.input}
+              type="number"
+              min="1"
+              required
+              value={form.quantity}
+              onChange={(e) => setForm({ ...form, quantity: e.target.value })}
+            />
+          </label>
+
+          <label style={styles.label}>
+            Precio de envío
+            <input
+              style={styles.input}
+              type="number"
+              min="0"
+              step="0.01"
+              required
+              value={form.shippingPrice}
+              onChange={(e) => setForm({ ...form, shippingPrice: e.target.value })}
+            />
+          </label>
+
+          <button type="submit" style={styles.primaryBtn} disabled={loading}>
+            {loading ? "Guardando..." : "Guardar pedido"}
+          </button>
+        </form>
+
+        {msg && <div style={{ color: "green", marginTop: 8 }}>{msg}</div>}
+        {err && <div style={{ color: "crimson", marginTop: 8 }}>{err}</div>}
+      </section>
+
+      <section style={styles.card}>
+        <h3 style={{marginTop: 0}}>Mis pedidos</h3>
+        {orders.length === 0 ? (
+          <i>No hay pedidos aún.</i>
         ) : (
-          <p>No tienes pedidos pendientes</p>
+          <div style={{ display: "grid", gap: 10 }}>
+            {orders.map((o) => (
+              <div key={o.id} style={styles.orderItem}>
+                <div style={{display: "flex", justifyContent: "space-between"}}>
+                  <strong>{o.productName}</strong>
+                  <small>{new Date(o.createdAt).toLocaleString()}</small>
+                </div>
+                <div>Cantidad: {o.quantity}</div>
+                <div>Envío: {o.shippingPrice}</div>
+                <div>Total: {o.totalPrice}</div>
+                <div>Usuario: {o.userEmail || o.userId}</div>
+              </div>
+            ))}
+          </div>
         )}
-      </ul>
+      </section>
     </div>
   );
 }
 
-export default BodegaPage;
+const styles = {
+  container: { maxWidth: 860, margin: "24px auto", padding: 16, fontFamily: "system-ui, sans-serif" },
+  title: { margin: 0 },
+  card: { border: "1px solid #e5e7eb", borderRadius: 12, padding: 16, marginTop: 16 },
+  form: { display: "grid", gap: 12, marginTop: 8 },
+  label: { display: "grid", gap: 6, fontSize: 14 },
+  input: { padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8, fontSize: 14 },
+  primaryBtn: { padding: "10px 14px", borderRadius: 10, border: "none", background: "#111827", color: "white", cursor: "pointer" },
+  secondaryBtn: { padding: "6px 10px", borderRadius: 8, border: "1px solid #d1d5db", background: "white", cursor: "pointer" },
+  pre: { background: "#f9fafb", padding: 10, borderRadius: 8, overflowX: "auto" },
+  orderItem: { border: "1px solid #e5e7eb", borderRadius: 10, padding: 12 }
+};
