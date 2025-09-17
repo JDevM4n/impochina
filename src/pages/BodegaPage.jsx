@@ -8,21 +8,23 @@ function BodegaPage() {
   const [costo, setCosto] = useState(null);
   const usuario = "usuario_auth_demo"; // 👈 este vendrá del microservicio Auth
 
-  // Traer productos pendientes desde el backend
+  // 🔹 Cargar productos pendientes del backend
   useEffect(() => {
     const fetchPedidos = async () => {
       try {
-        const res = await fetch(`http://localhost:8002/warehouse/pending-orders/${usuario}`);
+        const res = await fetch(
+          `http://localhost:8002/warehouse/pending-orders/${usuario}`
+        );
         const data = await res.json();
         setProductos(data.pedidos || []);
       } catch (error) {
-        console.error("Error al cargar pedidos:", error);
+        console.error("❌ Error al cargar pedidos:", error);
       }
     };
     fetchPedidos();
   }, []);
 
-  // Calcular costo
+  // 🔹 Calcular costo de envío
   const calcularEnvio = async () => {
     if (!peso) {
       alert("Ingresa el peso del paquete");
@@ -30,33 +32,37 @@ function BodegaPage() {
     }
     try {
       const res = await fetch(
-        `http://localhost:8002/warehouse/calculate-shipping?weight=${peso}`
+        `http://localhost:8000/warehouse/calculate-shipping?weight=${peso}`
       );
       const data = await res.json();
       setCosto(data.price);
     } catch (error) {
-      console.error("Error al calcular el envío:", error);
+      console.error("❌ Error al calcular el envío:", error);
     }
   };
 
-  // Enviar pedido
+  // 🔹 Enviar pedido seleccionado al backend
   const enviarPedido = async () => {
     if (!productoSeleccionado) {
       alert("Selecciona un producto");
       return;
     }
+    if (!costo) {
+      alert("Primero calcula el costo del envío");
+      return;
+    }
 
     const pedido = {
       usuario: usuario,
-      producto: productoSeleccionado.producto,
+      producto: productoSeleccionado.producto || productoSeleccionado.nombre,
       direccion: "Calle Falsa 123",
       imagen: productoSeleccionado.imagen,
       peso: productoSeleccionado.peso,
-      costo_envio: costo || 0,
+      costo_envio: costo,
     };
 
     try {
-      const res = await fetch("http://localhost:8002/warehouse/create-order", {
+      const res = await fetch("http://localhost:8000/warehouse/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(pedido),
@@ -64,7 +70,8 @@ function BodegaPage() {
       const data = await res.json();
       alert(`✅ Pedido creado: ${data.pedido.producto}`);
     } catch (error) {
-      console.error("Error al enviar pedido:", error);
+      console.error("❌ Error al enviar pedido:", error);
+      alert("Hubo un error al enviar el pedido");
     }
   };
 
@@ -75,20 +82,24 @@ function BodegaPage() {
         <a href="/HomePage">🏠 Volver al Pagina Inicial</a>
       </header>
 
+      {/* 🔹 Listado de productos */}
       <section className="bodega-list">
         <h2>Mis productos almacenados</h2>
         <div className="bodega-grid">
           {productos.length > 0 ? (
             productos.map((prod) => (
               <div
-                key={prod.id}
+                key={prod.id || prod._id} // ✅ corregido
                 className={`bodega-card ${
-                  productoSeleccionado?.id === prod.id ? "selected" : ""
+                  productoSeleccionado?.id === prod.id ||
+                  productoSeleccionado?._id === prod._id
+                    ? "selected"
+                    : ""
                 }`}
                 onClick={() => setProductoSeleccionado(prod)}
               >
-                <img src={prod.imagen} alt={prod.producto} />
-                <h3>{prod.producto}</h3>
+                <img src={prod.imagen} alt={prod.producto || prod.nombre} />
+                <h3>{prod.producto || prod.nombre}</h3>
                 <p>Peso: {prod.peso} kg</p>
               </div>
             ))
@@ -98,6 +109,7 @@ function BodegaPage() {
         </div>
       </section>
 
+      {/* 🔹 Calculadora de envío */}
       <section className="bodega-calculadora">
         <h2>Calculadora de envío</h2>
         <input
@@ -108,10 +120,13 @@ function BodegaPage() {
         />
         <button onClick={calcularEnvio}>Calcular costo</button>
         {costo !== null && (
-          <p>💰 Costo: <strong>${costo.toFixed(2)}</strong></p>
+          <p>
+            💰 Costo: <strong>${costo.toFixed(2)}</strong>
+          </p>
         )}
       </section>
 
+      {/* 🔹 Acciones */}
       <div className="acciones">
         <button disabled={!productoSeleccionado} onClick={enviarPedido}>
           🚀 Enviar ahora
@@ -123,6 +138,3 @@ function BodegaPage() {
 }
 
 export default BodegaPage;
-
-
-
