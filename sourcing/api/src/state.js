@@ -1,7 +1,7 @@
 // sourcing/api/src/state.js
 
-// Mapa en memoria: requestId -> estado
-const store = new Map();
+// ---- Estado del request (en memoria) ----
+const store = new Map(); // requestId -> state
 
 export const Status = {
   PENDING: "PENDING",
@@ -36,4 +36,15 @@ export function updateStatus(requestId, status, { message, error } = {}) {
   if (error !== undefined) s.error = error;
   store.set(requestId, s);
   return s;
+}
+
+// ---- Resultados del request (en memoria) ----
+const resultsStore = new Map(); // requestId -> items[]
+
+export function setResults(requestId, items) {
+  resultsStore.set(requestId, items);
+}
+
+export function getResults(requestId) {
+  return resultsStore.get(requestId) || [];
 }
