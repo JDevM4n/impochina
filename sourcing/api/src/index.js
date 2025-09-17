@@ -25,6 +25,8 @@ async function connectRabbit() {
   await channel.assertQueue("scrape.product.requested", { durable: true });
 
   // Consumidor para simular el worker dentro de la API (placeholder)
+  // Consumidor para simular el worker dentro de la API (placeholder)
+if (process.env.EMBEDDED_CONSUMER === "1") {
   await channel.consume(
     "scrape.product.requested",
     async (msg) => {
@@ -61,6 +63,11 @@ async function connectRabbit() {
     },
     { noAck: false }
   );
+  console.log("[api] Consumer attached to scrape.product.requested");
+} else {
+  console.log("[api] Embedded consumer disabled (EMBEDDED_CONSUMER != 1)");
+}
+
 
   console.log("[api] Consumer attached to scrape.product.requested");
   console.log("[api] Connected to RabbitMQ");
