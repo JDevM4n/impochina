@@ -1,138 +1,106 @@
 import React, { useState, useEffect } from "react";
-import "../styles/Bodega.css";
+import { getPendingOrders, calculateShipping, createOrder } from "../api/Service2";
 
 function BodegaPage() {
-  const [productos, setProductos] = useState([]);
-  const [productoSeleccionado, setProductoSeleccionado] = useState(null);
+  const [usuario] = useState("usuario_demo"); // en producción debería venir del login
+  const [pedidos, setPedidos] = useState([]);
   const [peso, setPeso] = useState("");
-  const [costo, setCosto] = useState(null);
-  const usuario = "usuario_auth_demo"; // 👈 este vendrá del microservicio Auth
+  const [precio, setPrecio] = useState(null);
+  const [producto, setProducto] = useState("");
+  const [direccion, setDireccion] = useState("");
+  const [imagen, setImagen] = useState("");
 
-  // 🔹 Cargar productos pendientes del backend
+  // 🔹 Cargar pedidos pendientes al iniciar
   useEffect(() => {
-    const fetchPedidos = async () => {
-      try {
-        const res = await fetch(
-          `http://localhost:8002/warehouse/pending-orders/${usuario}`
-        );
-        const data = await res.json();
-        setProductos(data.pedidos || []);
-      } catch (error) {
-        console.error("❌ Error al cargar pedidos:", error);
-      }
-    };
-    fetchPedidos();
-  }, []);
+    getPendingOrders(usuario).then((data) => setPedidos(data.pedidos || []));
+  }, [usuario]);
 
-  // 🔹 Calcular costo de envío
-  const calcularEnvio = async () => {
+  // 🔹 Calcular envío
+  const handleCalcular = async () => {
     if (!peso) {
-      alert("Ingresa el peso del paquete");
+      alert("Por favor ingresa el peso");
       return;
     }
-    try {
-      const res = await fetch(
-        `http://localhost:8000/warehouse/calculate-shipping?weight=${peso}`
-      );
-      const data = await res.json();
-      setCosto(data.price);
-    } catch (error) {
-      console.error("❌ Error al calcular el envío:", error);
-    }
+    const data = await calculateShipping(peso);
+    setPrecio(data.price);
   };
 
-  // 🔹 Enviar pedido seleccionado al backend
-  const enviarPedido = async () => {
-    if (!productoSeleccionado) {
-      alert("Selecciona un producto");
-      return;
-    }
-    if (!costo) {
-      alert("Primero calcula el costo del envío");
+  // 🔹 Crear pedido
+  const handleCrearPedido = async () => {
+    if (!producto || !direccion || !peso) {
+      alert("Completa todos los campos");
       return;
     }
 
     const pedido = {
-      usuario: usuario,
-      producto: productoSeleccionado.producto || productoSeleccionado.nombre,
-      direccion: "Calle Falsa 123",
-      imagen: productoSeleccionado.imagen,
-      peso: productoSeleccionado.peso,
-      costo_envio: costo,
+      usuario,
+      producto,
+      direccion,
+      imagen,
+      peso: parseFloat(peso),
+      costo_envio: precio || 0,
     };
 
-    try {
-      const res = await fetch("http://localhost:8000/warehouse/create-order", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(pedido),
-      });
-      const data = await res.json();
-      alert(`✅ Pedido creado: ${data.pedido.producto}`);
-    } catch (error) {
-      console.error("❌ Error al enviar pedido:", error);
-      alert("Hubo un error al enviar el pedido");
-    }
+    const data = await createOrder(pedido);
+    alert(data.mensaje);
+
+    // actualizar lista
+    const refreshed = await getPendingOrders(usuario);
+    setPedidos(refreshed.pedidos || []);
   };
 
   return (
-    <div className="bodega-container">
-      <header className="bodega-header">
-        <h1>📦 Mi Bodega</h1>
-        <a href="/HomePage">🏠 Volver al Pagina Inicial</a>
-      </header>
+    <div style={{ padding: "20px" }}>
+      <h1>📦 Bodega</h1>
 
-      {/* 🔹 Listado de productos */}
-      <section className="bodega-list">
-        <h2>Mis productos almacenados</h2>
-        <div className="bodega-grid">
-          {productos.length > 0 ? (
-            productos.map((prod) => (
-              <div
-                key={prod.id || prod._id} // ✅ corregido
-                className={`bodega-card ${
-                  productoSeleccionado?.id === prod.id ||
-                  productoSeleccionado?._id === prod._id
-                    ? "selected"
-                    : ""
-                }`}
-                onClick={() => setProductoSeleccionado(prod)}
-              >
-                <img src={prod.imagen} alt={prod.producto || prod.nombre} />
-                <h3>{prod.producto || prod.nombre}</h3>
-                <p>Peso: {prod.peso} kg</p>
-              </div>
-            ))
-          ) : (
-            <p>No tienes productos en la bodega</p>
-          )}
-        </div>
-      </section>
-
-      {/* 🔹 Calculadora de envío */}
-      <section className="bodega-calculadora">
-        <h2>Calculadora de envío</h2>
+      <div style={{ marginBottom: "20px" }}>
+        <h2>Nuevo pedido</h2>
+        <input
+          type="text"
+          placeholder="Producto"
+          value={producto}
+          onChange={(e) => setProducto(e.target.value)}
+        />
+        <br />
+        <input
+          type="text"
+          placeholder="Dirección"
+          value={direccion}
+          onChange={(e) => setDireccion(e.target.value)}
+        />
+        <br />
+        <input
+          type="text"
+          placeholder="URL Imagen"
+          value={imagen}
+          onChange={(e) => setImagen(e.target.value)}
+        />
+        <br />
         <input
           type="number"
           placeholder="Peso en kg"
           value={peso}
           onChange={(e) => setPeso(e.target.value)}
         />
-        <button onClick={calcularEnvio}>Calcular costo</button>
-        {costo !== null && (
-          <p>
-            💰 Costo: <strong>${costo.toFixed(2)}</strong>
-          </p>
-        )}
-      </section>
-
-      {/* 🔹 Acciones */}
-      <div className="acciones">
-        <button disabled={!productoSeleccionado} onClick={enviarPedido}>
-          🚀 Enviar ahora
-        </button>
-        <button>🛒 Esperar más compras</button>
+        <br />
+        <button onClick={handleCalcular}>Calcular envío</button>
+        {precio && <p>💰 Precio estimado: ${precio}</p>}
+        <br />
+        <button onClick={handleCrearPedido}>Crear pedido</button>
       </div>
+
+      <h2>Pedidos pendientes</h2>
+      <ul>
+        {pedidos.length > 0 ? (
+          pedidos.map((p) => (
+            <li key={p.id}>
+              {p.producto} - {p.direccion} - {p.peso}kg - ${p.costo_envio}
+            </li>
+          ))
+        ) : (
+          <p>No tienes pedidos pendientes</p>
+        )}
+      </ul>
     </div>
   );
 }
