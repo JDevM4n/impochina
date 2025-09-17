@@ -24,55 +24,48 @@ async function connectRabbit() {
   channel = await conn.createChannel();
   await channel.assertQueue("scrape.product.requested", { durable: true });
 
-  // Consumidor para simular el worker dentro de la API (placeholder)
-  // Consumidor para simular el worker dentro de la API (placeholder)
-if (process.env.EMBEDDED_CONSUMER === "1") {
-  await channel.consume(
-    "scrape.product.requested",
-    async (msg) => {
-      try {
-        const payload = JSON.parse(msg.content.toString());
-        const { requestId, urls = [] } = payload;
+  // Consumidor embebido solo si está habilitado
+  if (process.env.EMBEDDED_CONSUMER === "1") {
+    await channel.consume(
+      "scrape.product.requested",
+      async (msg) => {
+        try {
+          const payload = JSON.parse(msg.content.toString());
+          const { requestId, urls = [] } = payload;
 
-        // IN_PROGRESS
-        updateStatus(requestId, Status.IN_PROGRESS, { message: "Procesando..." });
+          updateStatus(requestId, Status.IN_PROGRESS, { message: "Procesando..." });
 
-        // Simulación de trabajo (1s). Aquí irá tu scraper real.
-        setTimeout(() => {
-          const items = urls.map((url, idx) => ({
-            url,
-            title: `Mock item ${idx + 1}`,
-            price: 0,
-            currency: "CNY",
-          }));
+          setTimeout(() => {
+            const items = urls.map((url, idx) => ({
+              url,
+              title: `Mock item ${idx + 1}`,
+              price: 0,
+              currency: "CNY",
+            }));
 
-          console.log(`[api] setResults -> requestId=${requestId} items=${items.length}`);
+            console.log(`[api] setResults -> requestId=${requestId} items=${items.length}`);
 
-          // Guardar resultados y cerrar como COMPLETED
-          setResults(requestId, items);
-          updateStatus(requestId, Status.COMPLETED, {
-            message: `Procesadas ${urls.length} URL(s)`,
-          });
+            setResults(requestId, items);
+            updateStatus(requestId, Status.COMPLETED, {
+              message: `Procesadas ${urls.length} URL(s)`,
+            });
 
-          channel.ack(msg);
-        }, 1000);
-      } catch (err) {
-        console.error("[api] Consumer error:", err?.message);
-        channel.nack(msg, false, false); // descartar para no quedar en loop
-      }
-    },
-    { noAck: false }
-  );
-  console.log("[api] Consumer attached to scrape.product.requested");
-} else {
-  console.log("[api] Embedded consumer disabled (EMBEDDED_CONSUMER != 1)");
-}
+            channel.ack(msg);
+          }, 1000);
+        } catch (err) {
+          console.error("[api] Consumer error:", err?.message);
+          channel.nack(msg, false, false);
+        }
+      },
+      { noAck: false }
+    );
+    console.log("[api] Consumer attached to scrape.product.requested");
+  } else {
+    console.log("[api] Embedded consumer disabled (EMBEDDED_CONSUMER != 1)");
+  }
 
-
-  console.log("[api] Consumer attached to scrape.product.requested");
   console.log("[api] Connected to RabbitMQ");
 
-  // Resiliencia básica
   conn.on("close", () => {
     console.error("[api] Rabbit connection closed");
     process.exit(1);
@@ -84,9 +77,7 @@ if (process.env.EMBEDDED_CONSUMER === "1") {
 }
 
 // Health
-app.get("/health", (_, res) =>
-  res.json({ ok: true, service: "sourcing-api" })
-);
+app.get("/health", (_, res) => res.json({ ok: true, service: "sourcing-api" }));
 
 // Crear solicitud
 app.post("/purchase-requests", async (req, res) => {
@@ -102,17 +93,14 @@ app.post("/purchase-requests", async (req, res) => {
     const requestId = uuidv4();
     const payload = { requestId, urls, ts: Date.now() };
 
-    // Estado inicial
     initPending(requestId, "Scrape job encolado");
 
-    // Encolar
     channel.sendToQueue(
       "scrape.product.requested",
       Buffer.from(JSON.stringify(payload)),
       { persistent: true }
     );
 
-    // Respuesta
     return res.status(202).json({
       requestId,
       status: Status.PENDING,
@@ -124,7 +112,7 @@ app.post("/purchase-requests", async (req, res) => {
   }
 });
 
-// Estado público del request
+// Estado público
 app.get("/purchase-requests/:id", (req, res) => {
   const { id } = req.params;
   const state = getStatus(id);
@@ -134,7 +122,7 @@ app.get("/purchase-requests/:id", (req, res) => {
   return res.json(state);
 });
 
-// Resultados públicos del request
+// Resultados públicos
 app.get("/purchase-requests/:id/results", (req, res) => {
   const { id } = req.params;
   const items = getResults(id);
@@ -142,7 +130,7 @@ app.get("/purchase-requests/:id/results", (req, res) => {
 });
 
 // =========================
-// Endpoints internos (para el worker separado)
+// Endpoints internos (para el worker)
 // =========================
 
 // Actualizar estado (INTERNAL)
@@ -161,6 +149,7 @@ app.post("/internal/purchase-requests/:id/status", (req, res) => {
   }
 
   const updated = updateStatus(id, status, { message, error });
+  console.log(`[api] [internal] status -> id=${id} ${status} msg="${message || ""}"`);
   return res.json(updated);
 });
 
@@ -178,6 +167,7 @@ app.post("/internal/purchase-requests/:id/results", (req, res) => {
   }
 
   setResults(id, items);
+  console.log(`[api] [internal] setResults -> id=${id} count=${items.length}`);
   return res.json({ requestId: id, saved: items.length });
 });
 
