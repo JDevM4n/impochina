@@ -1,6 +1,7 @@
 // sourcing/api/src/index.js
 import express from "express";
 import cors from "cors";
+import { Readable } from "node:stream";
 import { v4 as uuidv4 } from "uuid";
 import amqp from "amqplib";
 import {
@@ -21,12 +22,13 @@ const RABBIT_URL = process.env.RABBIT_URL || "amqp://rabbitmq:5672";
 
 let channel;
 
+/* ------------------------------ RabbitMQ ------------------------------ */
 async function connectRabbit() {
   const conn = await amqp.connect(RABBIT_URL);
   channel = await conn.createChannel();
   await channel.assertQueue("scrape.product.requested", { durable: true });
 
-  // Consumidor embebido solo si está habilitado
+  // Consumidor embebido SOLO si está habilitado (modo demo)
   if (process.env.EMBEDDED_CONSUMER === "1") {
     await channel.consume(
       "scrape.product.requested",
@@ -35,7 +37,9 @@ async function connectRabbit() {
           const payload = JSON.parse(msg.content.toString());
           const { requestId, urls = [] } = payload;
 
-          updateStatus(requestId, Status.IN_PROGRESS, { message: "Procesando..." });
+          updateStatus(requestId, Status.IN_PROGRESS, {
+            message: "Procesando...",
+          });
 
           setTimeout(() => {
             const items = urls.map((url, idx) => ({
@@ -45,7 +49,9 @@ async function connectRabbit() {
               currency: "CNY",
             }));
 
-            console.log(`[api] setResults -> requestId=${requestId} items=${items.length}`);
+            console.log(
+              `[api] setResults -> requestId=${requestId} items=${items.length}`
+            );
 
             setResults(requestId, items);
             updateStatus(requestId, Status.COMPLETED, {
@@ -78,10 +84,46 @@ async function connectRabbit() {
   });
 }
 
-// Health
+/* ------------------------------ Health ------------------------------ */
 app.get("/health", (_, res) => res.json({ ok: true, service: "sourcing-api" }));
 
-// Crear solicitud
+/* ------------------------------ Proxy de imágenes ------------------------------ */
+// Evita hotlink y añade UA/Referer de Alibaba. Compatible con Node 18/20/22.
+app.get("/image", async (req, res) => {
+  try {
+    const u = req.query.u;
+    if (!u) return res.status(400).json({ error: "missing u" });
+
+    const r = await fetch(u, {
+      headers: {
+        "user-agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36",
+        referer: "https://detail.tmall.com/",
+      },
+    });
+
+    if (!r.ok) return res.status(r.status).end();
+
+    res.setHeader(
+      "content-type",
+      r.headers.get("content-type") || "image/jpeg"
+    );
+    res.setHeader("cache-control", "public, max-age=86400");
+
+    // body es WebReadableStream en Node >=18 -> conviértelo a stream de Node
+    if (r.body && typeof r.body.getReader === "function") {
+      Readable.fromWeb(r.body).pipe(res);
+    } else {
+      const buf = Buffer.from(await r.arrayBuffer());
+      res.end(buf);
+    }
+  } catch (e) {
+    console.error("/image error:", e);
+    res.status(500).end();
+  }
+});
+
+/* ------------------------------ API pública ------------------------------ */
 app.post("/purchase-requests", async (req, res) => {
   try {
     const { urls = [] } = req.body ?? {};
@@ -114,7 +156,6 @@ app.post("/purchase-requests", async (req, res) => {
   }
 });
 
-// Estado público
 app.get("/purchase-requests/:id", (req, res) => {
   const { id } = req.params;
   const state = getStatus(id);
@@ -124,18 +165,13 @@ app.get("/purchase-requests/:id", (req, res) => {
   return res.json(state);
 });
 
-// Resultados públicos
 app.get("/purchase-requests/:id/results", (req, res) => {
   const { id } = req.params;
   const items = getResults(id);
   return res.json({ requestId: id, count: items.length, items });
 });
 
-// =========================
-// Endpoints internos (para el worker)
-// =========================
-
-// Actualizar estado (INTERNAL)
+/* ------------------------------ Endpoints internos (worker) ------------------------------ */
 app.post("/internal/purchase-requests/:id/status", (req, res) => {
   const { id } = req.params;
   const { status, message, error } = req.body ?? {};
@@ -151,11 +187,12 @@ app.post("/internal/purchase-requests/:id/status", (req, res) => {
   }
 
   const updated = updateStatus(id, status, { message, error });
-  console.log(`[api] [internal] status -> id=${id} ${status} msg="${message || ""}"`);
+  console.log(
+    `[api] [internal] status -> id=${id} ${status} msg="${message || ""}"`
+  );
   return res.json(updated);
 });
 
-// Guardar resultados (INTERNAL)
 app.post("/internal/purchase-requests/:id/results", (req, res) => {
   const { id } = req.params;
   const { items } = req.body ?? {};
@@ -173,6 +210,7 @@ app.post("/internal/purchase-requests/:id/results", (req, res) => {
   return res.json({ requestId: id, saved: items.length });
 });
 
+/* ------------------------------ Boot ------------------------------ */
 app.listen(PORT, async () => {
   console.log(`[api] listening on :${PORT}`);
   try {
