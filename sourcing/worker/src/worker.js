@@ -2,15 +2,14 @@
 import amqp from "amqplib";
 import { scrapeUrl } from "./scraper.js";
 import { scrapeWithPlaywright } from "./scraper.playwright.js";
-import translate from "@vitalets/google-translate-api";
 
 const RABBIT_URL     = process.env.RABBIT_URL || "amqp://rabbitmq:5672";
-const API_URL        = process.env.API_URL    || "http://127.0.0.1:3000";
+const API_URL        = process.env.API_URL    || "http://127.0.0.1:3000"; // define API_URL en tu entorno si usas 3301
 const INTERNAL_TOKEN = process.env.INTERNAL_TOKEN || "";
 const USE_PLAYWRIGHT = process.env.USE_PLAYWRIGHT === "1";
 const TRANSLATE_ES   = process.env.TRANSLATE_ES === "1";
 
-// -------------------- helpers HTTP --------------------
+// ---------- helpers HTTP ----------
 async function postJSON(url, body) {
   const headers = { "content-type": "application/json" };
   if (INTERNAL_TOKEN) headers["X-Internal-Token"] = INTERNAL_TOKEN;
@@ -24,7 +23,7 @@ async function postJSON(url, body) {
 
 async function postWithRetry(url, body, tries = 3, waitMs = 800) {
   for (let i = 0; i < tries; i++) {
-    try { return await postJSON(url, body); } 
+    try { return await postJSON(url, body); }
     catch (e) {
       if (i === tries - 1) throw e;
       await new Promise(r => setTimeout(r, waitMs));
@@ -32,7 +31,7 @@ async function postWithRetry(url, body, tries = 3, waitMs = 800) {
   }
 }
 
-// -------------------- URL utils --------------------
+// ---------- URL utils ----------
 function expandTaobaoAggregator(url) {
   try {
     const u = new URL(url);
@@ -56,17 +55,46 @@ function expandInputUrls(urls) {
 function isTaobaoProduct(url) {
   try {
     const { hostname } = new URL(url);
-    return (
-      hostname === "item.taobao.com" ||
-      hostname === "detail.tmall.com" ||
-      hostname.endsWith(".tmall.com")
-    );
+    return hostname === "item.taobao.com" || hostname === "detail.tmall.com" || hostname.endsWith(".tmall.com");
   } catch {
     return false;
   }
 }
 
-// -------------------- main --------------------
+// ---------- traducción safe (auto-detect ESM/CJS) ----------
+let translateFn = null;
+
+async function loadTranslateFn() {
+  if (translateFn) return translateFn;
+  const mod = await import("@vitalets/google-translate-api");
+  const candidates = [
+    mod,
+    mod?.default,
+    mod?.translate,
+    mod?.default?.translate,
+    mod?.default?.default,
+  ];
+  translateFn = candidates.find((c) => typeof c === "function") || null;
+  if (!translateFn) {
+    console.warn("[worker] translate module shape not callable:", Object.keys(mod || {}), typeof mod?.default);
+  }
+  return translateFn;
+}
+
+async function translateEsSafe(text) {
+  if (!TRANSLATE_ES || !text) return text;
+  try {
+    const fn = await loadTranslateFn();
+    if (!fn) return text; // no rompe si no hay función válida
+    const out = await fn(text, { to: "es" });
+    return out?.text || text;
+  } catch (e) {
+    console.warn("[worker] translate error:", e.message);
+    return text;
+  }
+}
+
+// ---------- main ----------
 async function main() {
   console.log("[worker] starting...");
   const conn = await amqp.connect(RABBIT_URL);
@@ -82,9 +110,7 @@ async function main() {
       const payload = JSON.parse(msg.content.toString());
       const { requestId, urls = [] } = payload;
       const expandedUrls = expandInputUrls(urls);
-      console.log(
-        `[worker] received requestId=${requestId} urls=${urls.length} -> expanded=${expandedUrls.length}`
-      );
+      console.log(`[worker] received requestId=${requestId} urls=${urls.length} -> expanded=${expandedUrls.length}`);
 
       try {
         // IN_PROGRESS
@@ -97,31 +123,31 @@ async function main() {
         for (const url of expandedUrls) {
           try {
             const usePw = USE_PLAYWRIGHT && isTaobaoProduct(url);
-            // console.log(`[worker] scraping (${usePw ? "playwright" : "cheerio"}) ${url}`);
-
             let data = usePw ? await scrapeWithPlaywright(url) : await scrapeUrl(url);
 
-            // Traducción opcional del título al español
-            let titleEs = data.title || null;
+            // traducir título (opcional)
             const titleZh = data.title || null;
-            if (TRANSLATE_ES && titleEs) {
-              try {
-                const t = await translate(titleEs, { to: "es" });
-                titleEs = t?.text || titleEs;
-              } catch (e) {
-                console.warn("[worker] translate error:", e.message);
-              }
-            }
+            const titleEs = await translateEsSafe(titleZh);
 
-            items.push({
+            const item = {
               url: data.url || url,
               title: titleEs,        // traducido si TRANSLATE_ES=1
-              title_zh: titleZh,     // original por si lo necesitas
+              title_zh: titleZh,     // original
               price: data.price ?? null,
               currency: data.currency || "CNY",
               image: data.image || null,
               httpStatus: data.httpStatus ?? 0,
+            };
+
+            // log de depuración
+            console.log("[worker] scraped", {
+              url: item.url,
+              title: item.title,
+              price: item.price,
+              image: Boolean(item.image),
             });
+
+            items.push(item);
           } catch (e) {
             items.push({
               url,
@@ -136,11 +162,8 @@ async function main() {
           }
         }
 
-        // Guardar resultados (con reintento)
-        await postWithRetry(
-          `${API_URL}/internal/purchase-requests/${requestId}/results`,
-          { items }
-        );
+        // guardar resultados (con reintento)
+        await postWithRetry(`${API_URL}/internal/purchase-requests/${requestId}/results`, { items });
 
         // COMPLETED
         await postJSON(`${API_URL}/internal/purchase-requests/${requestId}/status`, {
@@ -152,7 +175,7 @@ async function main() {
         console.log(`[worker] done requestId=${requestId}`);
       } catch (err) {
         console.error("[worker] error:", err.message);
-        channel.nack(msg, false, false); // descarta para no quedar en loop infinito
+        channel.nack(msg, false, false); // descarta para no quedar en loop
       }
     },
     { noAck: false }
