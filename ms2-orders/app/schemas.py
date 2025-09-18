@@ -1,4 +1,3 @@
-from typing import Optional
 from datetime import datetime
 from pydantic import BaseModel, Field
 
@@ -10,7 +9,6 @@ class OrderCreate(BaseModel):
 class OrderOut(BaseModel):
     id: str
     userId: str
-    userEmail: Optional[str] = None   # seguirá siendo opcional (no lo usaremos)
     productName: str
     quantity: int
     shippingPrice: float
