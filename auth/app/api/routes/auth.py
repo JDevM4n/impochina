@@ -1,15 +1,15 @@
-# ... el resto de tu archivo se queda igual ...
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from app.db import users_collection
 from passlib.hash import bcrypt
 import jwt
 import os
-import time  # <- nuevo
+import time
 
 router = APIRouter()
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "mysecretkey")
+JWT_ALG    = os.environ.get("JWT_ALG", "HS256")
 
 class User(BaseModel):
     username: str
@@ -29,10 +29,9 @@ def login(user: User):
     if not db_user or not bcrypt.verify(user.password, db_user["password"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    # ⬇️ Cambios mínimos: exp + algorithm HS256
     payload = {
-        "username": user.username,       # será nuestro "sub" lógico
-        "exp": int(time.time()) + 8*3600 # expira en 8 horas
+        "username": user.username,
+        "exp": int(time.time()) + 8 * 3600  # 8 horas
     }
-    token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+    token = jwt.encode(payload, SECRET_KEY, algorithm=JWT_ALG)
     return {"access_token": token}

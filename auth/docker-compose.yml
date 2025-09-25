@@ -1,23 +1,39 @@
-version: '3.8'
-
 services:
   mongodb-auth:
     image: mongo:6.0
     container_name: mongodb-auth
+    restart: unless-stopped
     ports:
-      - "27018:27017"  # puerto local 27018, interno 27017
+      # usa 27018 en el host para no chocar con otro Mongo local
+      - "27018:27017"
+    environment:
+      MONGO_INITDB_DATABASE: auth_db
     volumes:
       - mongo_auth_data:/data/db
 
   auth-service:
     build: .
     container_name: auth-service
-    ports:
-      - "8001:8001"
+    restart: unless-stopped
     environment:
-      - MONGO_URL=mongodb://mongodb-auth:27017
+      # Mongo (dentro de la red de compose)
+      MONGO_URL: mongodb://mongodb-auth:27017
+      MONGO_DB: auth_db
+
+      # JWT
+      SECRET_KEY: mysecretkey
+      JWT_ALG: HS256
+
+      # gRPC
+      GRPC_PORT: "50051"
+
+      # CORS (opcional)
+      ALLOW_ORIGINS: "*"
     depends_on:
       - mongodb-auth
+    ports:
+      - "8001:8001"      # FastAPI HTTP
+      - "50052:50051"    # gRPC (host->container)
 
 volumes:
   mongo_auth_data:
