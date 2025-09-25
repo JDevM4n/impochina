@@ -1,55 +1,222 @@
 // src/pages/BodegaPage.jsx
-import { useEffect, useState } from 'react';
-import { useAuth } from '../hooks/useAuth';
-import * as ordersApi from '../api/Service2';
+import React, { useEffect, useMemo, useState } from "react";
+import { useAuth } from "../hooks/useAuth";
+import { getMyOrders, createOrder } from "../api/Service2";
+import "../styles/Bodega.css";
 
 export default function BodegaPage() {
   const { token } = useAuth();
-  const [orders, setOrders] = useState([]);
-  const [f, setF] = useState({ productName: 'Teclado', quantity: 2, shippingPrice: 15000 });
-  const [msg, setMsg] = useState('');
 
-  const load = async () => {
-    setMsg('');
+  const [orders, setOrders] = useState([]);            // siempre array
+  const [loading, setLoading] = useState(true);        // estado de carga
+  const [submitting, setSubmitting] = useState(false); // estado del submit
+  const [error, setError] = useState("");
+
+  // form
+  const [productName, setProductName] = useState("Teclado");
+  const [quantity, setQuantity] = useState(2);
+  const [shippingPrice, setShippingPrice] = useState(15000);
+
+  const money = useMemo(
+    () =>
+      new Intl.NumberFormat("es-CO", {
+        style: "currency",
+        currency: "COP",
+        maximumFractionDigits: 0,
+      }),
+    []
+  );
+
+  useEffect(() => {
+    let cancel = false;
+    (async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const list = await getMyOrders(token);
+        if (!cancel) setOrders(Array.isArray(list) ? list : []);
+      } catch (e) {
+        if (!cancel) {
+          setError(e?.message || "No se pudieron cargar los pedidos.");
+          setOrders([]);
+        }
+      } finally {
+        if (!cancel) setLoading(false);
+      }
+    })();
+    return () => {
+      cancel = true;
+    };
+  }, [token]);
+
+  const validate = () => {
+    if (!productName?.trim()) return "El nombre del producto es obligatorio.";
+    if (!Number.isFinite(quantity) || quantity <= 0)
+      return "La cantidad debe ser un número entero mayor a 0.";
+    if (!Number.isFinite(shippingPrice) || shippingPrice < 0)
+      return "El costo de envío no puede ser negativo.";
+    return "";
+  };
+
+  const onCreate = async (e) => {
+    e?.preventDefault?.();
+    const v = validate();
+    if (v) {
+      setError(v);
+      return;
+    }
+    setError("");
+    setSubmitting(true);
+
+    // Optimistic UI (crea un placeholder temporal)
+    const tempId = `temp-${Date.now()}`;
+    const optimistic = {
+      id: tempId,
+      productName: productName.trim(),
+      quantity: Number(quantity),
+      shippingPrice: Number(shippingPrice),
+      _optimistic: true,
+    };
+    setOrders((prev) => [optimistic, ...prev]);
+
     try {
-      const data = await ordersApi.getMyOrders(token);
-      setOrders(data || []);
+      const created = await createOrder(token, {
+        productName: productName.trim(),
+        quantity: Number(quantity),
+        shippingPrice: Number(shippingPrice),
+      });
+
+      // Reemplaza el temporal por el definitivo
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === tempId ? { ...created, _optimistic: false } : o
+        )
+      );
+
+      // Limpia el formulario suave
+      setProductName("");
+      setQuantity(1);
+      setShippingPrice(0);
     } catch (e) {
-      setMsg(e.message);
+      // Revierte el optimista
+      setOrders((prev) => prev.filter((o) => o.id !== tempId));
+      setError(e?.message || "No se pudo crear el pedido.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  useEffect(() => { if (token) load(); }, [token]);
-
-  const create = async (e) => {
-    e.preventDefault();
-    setMsg('');
-    try {
-      await ordersApi.createOrder(token, f);
-      await load();
-      setMsg('Pedido creado.');
-    } catch (e) {
-      setMsg(e.message);
-    }
-  };
+  const list = Array.isArray(orders) ? orders : [];
 
   return (
-    <div style={{ padding: 16 }}>
-      <h2>Mis pedidos</h2>
-      {msg && <p>{msg}</p>}
+    <div className="bodega-container">
+      <header className="bodega-header">
+        <div className="brand">
+          <span className="logo-dot" />
+          <span>Impochina</span>
+        </div>
+        <div className="header-actions">
+          <a className="link" href="/home">Inicio</a>
+          <a className="link" href="/bodega">Bodega</a>
+        </div>
+      </header>
 
-      <form onSubmit={create} style={{ marginBottom: 16 }}>
-        <input value={f.productName} onChange={e=>setF({...f, productName:e.target.value})} placeholder="Producto" />
-        <input type="number" value={f.quantity} onChange={e=>setF({...f, quantity:Number(e.target.value)})} placeholder="Cantidad" />
-        <input type="number" value={f.shippingPrice} onChange={e=>setF({...f, shippingPrice:Number(e.target.value)})} placeholder="Envío" />
-        <button type="submit">Crear pedido</button>
-      </form>
+      <main className="bodega-main">
+        <section className="panel">
+          <h1 className="panel-title">Mis pedidos</h1>
+          <p className="panel-sub">Crea y visualiza tus órdenes de bodega.</p>
 
-      <ul>
-        {orders.map(o => (
-          <li key={o._id || JSON.stringify(o)}>{o.productName} x{o.quantity} – envío {o.shippingPrice}</li>
-        ))}
-      </ul>
+          {error && <div className="alert error">{error}</div>}
+
+          <form className="form-grid" onSubmit={onCreate}>
+            <div className="field">
+              <label>Producto</label>
+              <input
+                value={productName}
+                onChange={(e) => setProductName(e.target.value)}
+                placeholder="Ej. Teclado mecánico"
+                maxLength={80}
+              />
+            </div>
+
+            <div className="field small">
+              <label>Cantidad</label>
+              <input
+                type="number"
+                min={1}
+                step={1}
+                value={quantity}
+                onChange={(e) => setQuantity(Number(e.target.value))}
+              />
+            </div>
+
+            <div className="field small">
+              <label>Envío (COP)</label>
+              <input
+                type="number"
+                min={0}
+                step={100}
+                value={shippingPrice}
+                onChange={(e) => setShippingPrice(Number(e.target.value))}
+              />
+            </div>
+
+            <div className="actions">
+              <button className="btn-primary" type="submit" disabled={submitting}>
+                {submitting ? "Creando..." : "Crear pedido"}
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <section className="list-section">
+          <div className="section-title">
+            <span className="emoji">📦</span>
+            <span>Listado</span>
+          </div>
+
+          {loading ? (
+            <div className="skeleton-grid">
+              <div className="skeleton card" />
+              <div className="skeleton card" />
+              <div className="skeleton card" />
+            </div>
+          ) : list.length === 0 ? (
+            <div className="empty">
+              Aún no tienes pedidos. Crea el primero arriba 👆
+            </div>
+          ) : (
+            <div className="grid">
+              {list.map((o, idx) => {
+                const key =
+                  o.id ?? o._id ?? `${o.productName}-${o.quantity}-${idx}`;
+                return (
+                  <article className={`card ${o._optimistic ? "optimistic" : ""}`} key={key}>
+                    <div className="card-head">
+                      <strong className="card-title">
+                        {o.productName}
+                      </strong>
+                      <span className="badge">
+                        {o._optimistic ? "Guardando..." : "OK"}
+                      </span>
+                    </div>
+                    <dl className="meta">
+                      <div>
+                        <dt>Cantidad</dt>
+                        <dd>{o.quantity}</dd>
+                      </div>
+                      <div>
+                        <dt>Envío</dt>
+                        <dd>{money.format(o.shippingPrice || 0)}</dd>
+                      </div>
+                    </dl>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      </main>
     </div>
   );
 }

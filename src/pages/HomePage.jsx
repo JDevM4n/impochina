@@ -1,112 +1,105 @@
-import React, { useState, useEffect } from "react";
+// src/pages/HomePage.jsx
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../hooks/useAuth";
 import "../styles/Home.css";
 
-function HomePage() {
-  const [link, setLink] = useState("");
-  const [bodega, setBodega] = useState([]);
-  const [loading, setLoading] = useState(false);
+export default function HomePage() {
+  const [url, setUrl] = useState("");
+  const { logout } = useAuth();
+  const nav = useNavigate();
 
-  // Simulación de traer datos desde el Microservicio 2
-  useEffect(() => {
-    const fetchBodega = async () => {
-      setLoading(true);
-      try {
-        const response = await fetch("http://localhost:5002/bodega"); 
-        // 👆 Aquí va la ruta real del microservicio 2
-        const data = await response.json();
-        setBodega(data);
-      } catch (error) {
-        console.error("Error al traer bodega:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchBodega();
-  }, []);
-
-  const handleSearch = () => {
-    if (!link) {
-      alert("Por favor pega un enlace válido");
-      return;
-    }
-    console.log("Buscando producto con link:", link);
-    // Aquí iría la conexión al backend/microservicio 1
+  const buscar = (e) => {
+    e.preventDefault();
+    // TODO: tu lógica de búsqueda
+    // console.log("Buscar:", url);
   };
 
-  const handleDeleteProfile = () => {
-    if (window.confirm("¿Seguro que deseas eliminar tu perfil?")) {
-      console.log("Perfil eliminado");
-      // Aquí se llama al microservicio para borrar usuario
+  const onLogout = async () => {
+    try {
+      await logout?.();
+    } finally {
+      nav("/login");
     }
   };
 
   return (
-    <div className="home-container">
-      {/* Header con menú */}
-      <header className="home-header">
-        <h1>Impochina</h1>
-        <nav className="menu">
-          <a href="#pedidos">Historial de compra</a>
-          <a href="/BodegaPage">Bodega</a>
-          <a href="#perfil">Perfil</a>
-          <button onClick={handleDeleteProfile} className="delete-btn">
-            Eliminar Perfil
+    <>
+      {/* Navbar */}
+      <header className="navbar">
+        <div className="brand">
+          <span className="logo-dot" /> Impochina
+        </div>
+        <nav className="nav-actions">
+          <a className="nav-link" href="/bodega">Bodega</a>
+          <button className="btn-outline" onClick={onLogout}>
+            Cerrar sesión
           </button>
         </nav>
       </header>
 
-      {/* Hero Section */}
-      <section className="home-hero">
-        <h2>Encuentra tus productos de 1688 fácilmente</h2>
-        <p>Pega el enlace del producto y nosotros lo buscamos por ti.</p>
+      {/* Hero */}
+      <section className="hero">
+        <div className="hero-content">
+          <h1>Encuentra tus productos de 1688 fácilmente</h1>
+          <p className="lead">
+            Pega el enlace del producto y nosotros lo buscamos por ti.
+          </p>
 
-        <div className="search-bar">
-          <input
-            type="text"
-            placeholder="Pega aquí el enlace del producto (ej. https://1688.com/item/...)"
-            value={link}
-            onChange={(e) => setLink(e.target.value)}
-          />
-          <button onClick={handleSearch}>Buscar Producto</button>
+          <form className="search" onSubmit={buscar}>
+            <input
+              type="url"
+              placeholder="Pega aquí el enlace del producto (ej. https://1688.com/item/...)"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              required
+            />
+            <button className="btn-primary" type="submit">
+              Buscar Producto
+            </button>
+          </form>
         </div>
       </section>
 
-      {/* Sección Microservicio 2 - Bodega */}
-      <section id="ms2" className="bodega-section">
-        <h2>📦 Inventario de Bodega</h2>
-        {loading ? (
-          <p>Cargando bodega...</p>
-        ) : (
-          <div className="bodega-list">
-            {bodega.length > 0 ? (
-              bodega.map((item, index) => (
-                <div key={index} className="bodega-card">
-                  <h3>{item.nombre}</h3>
-                  <p>Cantidad: {item.cantidad}</p>
-                  <p>Precio: ${item.precio}</p>
-                </div>
-              ))
-            ) : (
-              <p>No hay productos en la bodega.</p>
-            )}
-          </div>
-        )}
+      {/* Inventario de Bodega */}
+      <section className="section">
+        <div className="section-title">
+          <span className="emoji">📦</span>
+          <span>Inventario de Bodega</span>
+        </div>
+        <p className="empty">No hay productos en la bodega.</p>
+
+        {/* Ejemplo futuro:
+        <div className="inventory">
+          {items.map(p => (
+            <article className="card" key={p.id}>
+              <strong>{p.nombre}</strong>
+              <div className="muted">{p.descripcion}</div>
+            </article>
+          ))}
+        </div> */}
       </section>
 
       {/* Beneficios */}
-      <section className="benefits">
-        <div className="card">⚡ Búsqueda rápida</div>
-        <div className="card">✅ Resultados confiables</div>
-        <div className="card">🌎 Todo en un solo lugar</div>
+      <section className="features">
+        <div className="feature">
+          <span className="dot fast" />
+          <strong>Búsqueda rápida</strong>
+        </div>
+        <div className="feature">
+          <span className="dot ok" />
+          <strong>Resultados confiables</strong>
+        </div>
+        <div className="feature">
+          <span className="dot world" />
+          <strong>Todo en un solo lugar</strong>
+        </div>
       </section>
 
       {/* Footer */}
-      <footer className="home-footer">
-        <p>© 2025 Impochina - Todos los derechos reservados</p>
+      <footer className="footer">
+        © 2025 Impochina — Todos los derechos reservados
       </footer>
-    </div>
+    </>
   );
 }
-
-export default HomePage;

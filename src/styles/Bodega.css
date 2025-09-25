@@ -1,163 +1,198 @@
-/* Layout general */
+:root {
+  --blue-500: #3b82f6;
+  --blue-600: #2563eb;
+  --blue-800: #1e40af;
+  --bg: #f6f7fb;
+  --text: #0f172a;
+  --muted: #64748b;
+  --card: #ffffff;
+  --shadow: 0 10px 28px rgba(2, 6, 23, 0.12);
+  --radius: 16px;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: "Poppins", system-ui, sans-serif; }
+
 .bodega-container {
-  font-family: 'Poppins', sans-serif;
-  background: #f8f9fc;
   min-height: 100vh;
-  padding: 20px 40px;
-  color: #333;
   display: flex;
   flex-direction: column;
 }
 
 /* Header */
 .bodega-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #fff;
+  border-bottom: 1px solid rgba(2,6,23,0.06);
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 15px 30px;
-  background: #2563eb;
-  color: white;
-  border-radius: 8px;
+  justify-content: space-between;
+  padding: 14px 20px;
 }
 
-.bodega-header h1 {
-  font-size: 22px;
-  font-weight: 700;
+.brand { display: flex; gap: 10px; align-items: center; font-weight: 800; }
+.logo-dot {
+  width: 12px; height: 12px; border-radius: 999px;
+  background: linear-gradient(135deg, var(--blue-500), var(--blue-800));
+  box-shadow: 0 0 0 4px rgba(59,130,246,0.15);
 }
 
-.bodega-header a {
-  color: white;
+.header-actions { display: flex; gap: 10px; }
+.link {
+  color: var(--blue-600);
   text-decoration: none;
-  font-weight: 500;
-  background: #1e40af;
-  padding: 8px 14px;
-  border-radius: 6px;
-  transition: 0.3s;
-}
-
-.bodega-header a:hover {
-  background: #1e3a8a;
-}
-
-/* Lista de productos */
-.bodega-list {
-  margin-top: 40px;
-}
-
-.bodega-list h2 {
-  font-size: 26px;
-  font-weight: 700;
-  color: #1e293b;
-  margin-bottom: 20px;
-}
-
-/* Grid de productos */
-.bodega-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 20px;
-}
-
-.bodega-card {
-  background: white;
-  padding: 20px;
-  border-radius: 12px;
-  box-shadow: 0px 4px 8px rgba(0,0,0,0.1);
-  cursor: pointer;
-  transition: 0.3s;
-}
-
-.bodega-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0px 6px 12px rgba(0,0,0,0.15);
-}
-
-.bodega-card.selected {
-  border: 2px solid #22c55e;
-  background: #ecfdf5;
-}
-
-.bodega-card h3 {
-  font-size: 18px;
   font-weight: 600;
-  color: #1e293b;
+  padding: 8px 12px;
+  border-radius: 10px;
+}
+.link:hover { background: rgba(37,99,235,0.08); }
+
+/* Main */
+.bodega-main {
+  width: 100%;
+  max-width: 1100px;
+  margin: 22px auto 40px;
+  padding: 0 20px;
 }
 
-.bodega-card p {
-  margin: 5px 0;
-  font-size: 14px;
-  color: #475569;
+/* Panel Crear */
+.panel {
+  background: #fff;
+  border: 1px solid rgba(2,6,23,0.06);
+  border-radius: var(--radius);
+  padding: 18px;
+  box-shadow: var(--shadow);
 }
 
-/* Calculadora de envío */
-.bodega-calculadora {
-  margin-top: 50px;
-  padding: 30px;
-  background: white;
+.panel-title { margin: 0; font-size: 20px; font-weight: 800; }
+.panel-sub { margin: 6px 0 12px; color: var(--muted); }
+
+/* Alertas */
+.alert {
   border-radius: 12px;
-  box-shadow: 0px 4px 8px rgba(0,0,0,0.1);
+  padding: 12px 14px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.alert.error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+
+/* Form grid */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 12px;
+  align-items: end;
+}
+.field { grid-column: span 6; display: flex; flex-direction: column; gap: 6px; }
+.field.small { grid-column: span 3; }
+.field label { font-weight: 700; font-size: 13px; color: #0b1220; }
+.field input {
+  border: 1px solid rgba(2,6,23,0.12);
+  border-radius: 12px;
+  padding: 12px 12px;
+  outline: none;
+  background: #fff;
+  transition: box-shadow .2s ease, border-color .2s ease;
+}
+.field input:focus {
+  border-color: var(--blue-600);
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.15);
 }
 
-.bodega-calculadora h2 {
-  font-size: 24px;
-  font-weight: 700;
-  color: #1e293b;
-  margin-bottom: 15px;
-}
-
-.bodega-calculadora button {
-  padding: 12px 20px;
-  background: #2563eb;
-  color: white;
-  font-weight: bold;
+.actions { grid-column: span 12; display: flex; justify-content: flex-end; }
+.btn-primary {
   border: none;
-  border-radius: 8px;
+  outline: none;
   cursor: pointer;
-  transition: 0.3s;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(135deg, var(--blue-500), var(--blue-800));
+  box-shadow: 0 8px 16px rgba(37,99,235,0.25);
+  transition: transform .06s ease, filter .2s ease, opacity .2s ease;
+}
+.btn-primary:hover { filter: brightness(1.05); }
+.btn-primary:active { transform: translateY(1px); }
+.btn-primary:disabled { opacity: .7; cursor: not-allowed; }
+
+/* Listado */
+.list-section { margin-top: 16px; }
+.section-title {
+  display: inline-flex;
+  align-items: center; gap: 10px;
+  font-weight: 800; margin: 10px 0; font-size: 16px;
+}
+.section-title .emoji { font-size: 18px; }
+
+.empty {
+  background: #fff;
+  border: 1px dashed rgba(2,6,23,0.2);
+  color: var(--muted);
+  padding: 18px;
+  border-radius: 14px;
 }
 
-.bodega-calculadora button:hover {
-  background: #1e40af;
+/* Grid cards */
+.grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 14px;
 }
-
-.bodega-calculadora p {
-  margin-top: 15px;
-  font-size: 16px;
-  color: #334155;
-}
-
-/* Acciones finales */
-.acciones {
-  margin-top: 20px;
-  display: flex;
-  gap: 15px;
-}
-
-.acciones button {
-  flex: 1;
+.card {
+  grid-column: span 12;
+  background: var(--card);
+  border: 1px solid rgba(2,6,23,0.08);
+  border-radius: var(--radius);
   padding: 14px;
-  border: none;
-  border-radius: 8px;
-  font-weight: bold;
-  cursor: pointer;
-  transition: 0.3s;
+  box-shadow: var(--shadow);
+  transition: transform .08s ease;
+}
+.card:hover { transform: translateY(-2px); }
+.card.optimistic { opacity: .75; }
+
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.card-title { font-size: 15px; }
+
+.badge {
+  font-size: 12px; font-weight: 800; padding: 6px 10px; border-radius: 999px;
+  background: rgba(16,185,129,0.1); color: #065f46; border: 1px solid rgba(16,185,129,0.25);
+}
+.card.optimistic .badge {
+  background: rgba(59,130,246,0.1); color: #1e40af; border-color: rgba(59,130,246,0.25);
 }
 
-.acciones button:first-child {
-  background: #22c55e;
-  color: white;
+/* Meta */
+.meta {
+  margin-top: 8px; display: grid; grid-template-columns: repeat(12, 1fr); gap: 10px;
+}
+.meta > div { grid-column: span 6; background: #f8fafc; border: 1px solid rgba(2,6,23,0.06); border-radius: 12px; padding: 10px; }
+.meta dt { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.meta dd { margin: 0; font-weight: 700; }
+
+/* Loading skeletons */
+.skeleton-grid {
+  margin-top: 12px; display: grid; grid-template-columns: repeat(12, 1fr); gap: 14px;
+}
+.skeleton.card {
+  grid-column: span 12; height: 86px; border-radius: var(--radius);
+  background: linear-gradient(90deg, #eef2ff, #f8fafc, #eef2ff);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s infinite;
+  border: 1px solid rgba(2,6,23,0.06);
+}
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
-.acciones button:first-child:hover {
-  background: #16a34a;
+/* Responsive */
+@media (min-width: 768px) {
+  .card { grid-column: span 6; }
 }
-
-.acciones button:last-child {
-  background: #f1f5f9;
-  color: #1e293b;
-  border: 1px solid #cbd5e1;
-}
-
-.acciones button:last-child:hover {
-  background: #e2e8f0;
+@media (min-width: 1024px) {
+  .card { grid-column: span 4; }
 }

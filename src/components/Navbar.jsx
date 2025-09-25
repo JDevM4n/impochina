@@ -1,22 +1,57 @@
-// src/components/Navbar.jsx
-import { Link } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth';
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../hooks/useAuth";
+import "../styles/Navbar.css";
 
 export default function Navbar() {
-  const { isAuth, logout } = useAuth();
+  const { isAuthenticated, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login", { replace: true });
+  };
 
   return (
-    <nav style={{ padding: 12, borderBottom: '1px solid #eee' }}>
-      <Link to="/" style={{ marginRight: 12 }}>Home</Link>
-      {isAuth && <Link to="/bodega" style={{ marginRight: 12 }}>Bodega</Link>}
-      {!isAuth ? (
-        <>
-          <Link to="/login" style={{ marginRight: 12 }}>Login</Link>
-          <Link to="/register">Register</Link>
-        </>
-      ) : (
-        <button onClick={logout} style={{ marginLeft: 12 }}>Salir</button>
-      )}
+    <nav className="navbar">
+      <div className="nav-inner">
+        {/* Brand */}
+        <div className="brand">
+          <span className="logo-dot" />
+          <span>Impochina</span>
+        </div>
+
+        {/* Links */}
+        <div className="nav-links">
+          {isAuthenticated ? (
+            <>
+              <Link to="/orders" className="nav-link">
+                Historial de compra
+              </Link>
+              <Link to="/bodega" className="nav-link">
+                Bodega
+              </Link>
+              <Link to="/perfil" className="nav-link">
+                Perfil
+              </Link>
+              <button className="btn-logout" onClick={handleLogout}>
+                Salir
+              </button>
+            </>
+          ) : (
+            <>
+              <Link to="/login" className="nav-link">
+                Iniciar sesión
+              </Link>
+              <Link to="/register" className="nav-link">
+                Crear cuenta
+              </Link>
+              <Link to="/home" className="nav-link">
+                Pagina Principal
+              </Link>
+            </>
+          )}
+        </div>
+      </div>
     </nav>
   );
 }
