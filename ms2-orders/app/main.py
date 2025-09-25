@@ -2,6 +2,7 @@
 from fastapi import FastAPI
 from app.api.routes.orders import router as orders_router
 from app.db import connect, disconnect
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
