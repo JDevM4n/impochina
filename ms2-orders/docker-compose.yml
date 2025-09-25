@@ -1,0 +1,31 @@
+version: "3.9"
+services:
+  mongo:
+    image: mongo:6.0
+    container_name: ms2-mongo
+    restart: unless-stopped
+    ports: ["27017:27017"]
+    environment:
+      MONGO_INITDB_DATABASE: impochina_orders
+    volumes:
+      - mongo_data:/data/db
+
+  ms2-orders:
+    build: { context: ., dockerfile: Dockerfile }
+    container_name: ms2-orders
+    restart: unless-stopped
+    environment:
+      MONGO_URL: mongodb://mongo:27017
+      MONGO_DB: impochina_orders
+      AUTH_JWT_SECRET: devsecret        # = al AUTH
+      AUTH_JWT_ALG: HS256
+      AUTH_JWT_ISS: impochina-auth      # opcional
+      AUTH_JWT_AUD: ms2-orders          # opcional
+      DEV_HEADERS_FALLBACK: "false"
+      ALLOW_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      PORT: "8000"
+    depends_on: [mongo]
+    ports: ["8000:8000"]
+
+volumes:
+  mongo_data:
