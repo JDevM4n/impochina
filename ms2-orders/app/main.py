@@ -5,6 +5,16 @@ from app.db import connect, disconnect
 
 app = FastAPI()
 
+origins = ["http://localhost:3000"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],     # OPTIONS, GET, POST, etc.
+    allow_headers=["*"],     # incluye Authorization
+)
+
 @app.on_event("startup")
 def _startup():
     connect()          # <- sin await
