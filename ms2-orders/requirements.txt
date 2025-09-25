@@ -1,9 +1,9 @@
 fastapi==0.112.2
 uvicorn[standard]==0.30.6
 pydantic==2.8.2
-
-# Pareja compatible:
 motor==3.6.0
-pymongo==4.9.2
-
+pymongo==4.10.1
 PyJWT==2.9.0
+
+grpcio==1.64.1
+grpcio-tools==1.64.1
