@@ -1,13 +1,23 @@
 // src/api/authService.js
-import axios from "axios";
+import { apiFetch, getAuthBase } from './apiService';
 
-const API_BASE = "http://localhost:8001/auth"; // ajusta si tu backend usa otro puerto o prefijo
+export async function register(username, password) {
+  return apiFetch(getAuthBase(), '/auth/register', {
+    method: 'POST',
+    body: { username, password },
+  });
+}
 
-export const register = (user) => {
-  return axios.post(`${API_BASE}/register`, user);
-};
+export async function login(username, password) {
+  const data = await apiFetch(getAuthBase(), '/auth/login', {
+    method: 'POST',
+    body: { username, password },
+  });
+  // guarda token
+  if (data?.access_token) localStorage.setItem('token', data.access_token);
+  return data;
+}
 
-export const login = (user) => {
-  return axios.post(`${API_BASE}/login`, user);
-};
-
+export function logout() {
+  localStorage.removeItem('token');
+}

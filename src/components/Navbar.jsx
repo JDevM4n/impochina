@@ -1,18 +1,22 @@
-import React from "react";
+// src/components/Navbar.jsx
+import { Link } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
 
-export default function Navbar({ username, onLogout }) {
+export default function Navbar() {
+  const { isAuth, logout } = useAuth();
+
   return (
-    <nav className="bg-blue-700 text-white p-4 flex justify-between">
-      <span className="font-bold text-lg">ImporChina</span>
-      <div>
-        <span className="mr-4">{username}</span>
-        <button
-          onClick={onLogout}
-          className="bg-blue-500 hover:bg-blue-600 px-3 py-1 rounded"
-        >
-          Logout
-        </button>
-      </div>
+    <nav style={{ padding: 12, borderBottom: '1px solid #eee' }}>
+      <Link to="/" style={{ marginRight: 12 }}>Home</Link>
+      {isAuth && <Link to="/bodega" style={{ marginRight: 12 }}>Bodega</Link>}
+      {!isAuth ? (
+        <>
+          <Link to="/login" style={{ marginRight: 12 }}>Login</Link>
+          <Link to="/register">Register</Link>
+        </>
+      ) : (
+        <button onClick={logout} style={{ marginLeft: 12 }}>Salir</button>
+      )}
     </nav>
   );
 }
