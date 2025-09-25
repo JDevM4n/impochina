@@ -2,15 +2,14 @@ syntax = "proto3";
 package auth;
 
 service AuthService {
-  rpc VerifyToken (VerifyTokenRequest) returns (VerifyTokenResponse);
+  rpc ValidateToken (ValidateTokenRequest) returns (ValidateTokenResponse);
 }
 
-message VerifyTokenRequest {
+message ValidateTokenRequest {
   string token = 1;
 }
 
-message VerifyTokenResponse {
-  bool   valid    = 1;
+message ValidateTokenResponse {
+  bool valid = 1;
   string username = 2;
-  string error    = 3;
 }
