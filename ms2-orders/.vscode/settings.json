@@ -1,0 +1,9 @@
+{
+  "python.defaultInterpreterPath": ".venv\\Scripts\\python.exe",
+  "python.linting.enabled": true,
+  "python.linting.pylintEnabled": true,
+  "python.linting.args": ["--rcfile=.pylintrc"],
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": "explicit"
+  }
+}

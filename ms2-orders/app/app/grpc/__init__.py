@@ -1,0 +1,19 @@
+app/
+  __init__.py
+  main.py
+  db.py
+  models.py
+  schemas.py
+  security.py
+  auth_client.py
+  auth_dep.py
+  grpc_client.py
+  api/
+    __init__.py
+    routes/
+      __init__.py
+      orders.py
+  grpc/
+    __init__.py
+    auth_pb2.py
+    auth_pb2_grpc.py

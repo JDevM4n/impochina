@@ -1,0 +1,15 @@
+[MASTER]
+ignore=venv,.venv,tests,migrations,__pycache__,build,dist
+init-hook='import sys, os; sys.path.append(os.path.abspath(".")); sys.path.append(os.path.abspath("./app"))'
+
+[MESSAGES CONTROL]
+disable=C0114,C0115,C0116,R0903,W0511,C0412,C0103,W1203
+
+[FORMAT]
+max-line-length=100
+
+[IMPORTS]
+ignored-modules=fastapi,fastapi.middleware.cors,pydantic,pymongo,grpc,app.grpc.auth_pb2,app.grpc.auth_pb2_grpc
+known-third-party=fastapi,pydantic,pymongo,grpc,requests
+known-first-party=app
+import-order-style=google
