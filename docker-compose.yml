@@ -1,100 +1,47 @@
 
-name: impochina
+
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: impo-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASS}
-      POSTGRES_DB: ${DB_NAME}
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    networks: [impochina_net]
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   rabbitmq:
-    image: rabbitmq:3.13-management-alpine
-    container_name: impo-rabbit
-    restart: unless-stopped
+    image: rabbitmq:3.13-management
+    ports:
+      - "5672:5672"    # AMQP
+      - "15672:15672"  # Panel web
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBIT_USER}
-      RABBITMQ_DEFAULT_PASS: ${RABBIT_PASS}
-    ports:
-      - "5672:5672"      # AMQP
-      - "15672:15672"    # UI
-    networks: [impochina_net]
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      RABBITMQ_DEFAULT_USER: impochina
+      RABBITMQ_DEFAULT_PASS: impochina
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
 
-  redis:
-    image: redis:7-alpine
-    container_name: impo-redis
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-    networks: [impochina_net]
-
-  browserless:
-    image: browserless/chrome:latest
-    container_name: impo-browser
-    restart: unless-stopped
-    environment:
-      MAX_CONCURRENT_SESSIONS: 2
-      CONNECTION_TIMEOUT: 60000
-    ports:
-      - "3001:3000"    # WebSocket/HTTP del browserless
-    networks: [impochina_net]
-
-  sourcing-api:
+  api:
     build:
       context: ./sourcing/api
-    container_name: impo-sourcing-api
-    restart: unless-stopped
-    env_file: [.env]
-    environment:
-      NODE_ENV: production
-      PORT: 3000
-      RABBIT_URL: amqp://${RABBIT_USER}:${RABBIT_PASS}@rabbitmq:5672
-      POSTGRES_URL: postgres://${DB_USER}:${DB_PASS}@postgres:5432/${DB_NAME}
-    ports:
-      - "3000:3000"
     depends_on:
-      rabbitmq:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-    networks: [impochina_net]
+      - rabbitmq
+    environment:
+      PORT: "3301"
+      # dentro de la red de Compose, el host de Rabbit es el nombre del servicio
+      RABBIT_URL: "amqp://impochina:impochina@rabbitmq:5672"
+    ports:
+      - "3301:3301"
+    # mapea el código (solo lectura) y la "BD" json persistente
+    volumes:
+      - ./sourcing/api/src:/app/src:ro
+      - ./sourcing/api/cart-db.json:/app/cart-db.json
+    restart: unless-stopped
 
-  sourcing-worker:
+  worker:
     build:
       context: ./sourcing/worker
-    container_name: impo-sourcing-worker
-    restart: unless-stopped
-    env_file: [.env]
-    environment:
-      NODE_ENV: production
-      RABBIT_URL: amqp://${RABBIT_USER}:${RABBIT_PASS}@rabbitmq:5672
-      BROWSER_WS: ws://browserless:3000
     depends_on:
-      rabbitmq:
-        condition: service_healthy
-      browserless:
-        condition: service_started
-    networks: [impochina_net]
-
-networks:
-  impochina_net:
+      - rabbitmq
+      - api
+    environment:
+      RABBIT_URL: "amqp://impochina:impochina@rabbitmq:5672"
+      API_URL: "http://api:3301"   # usa el NOMBRE DEL SERVICIO del API
+      USE_PLAYWRIGHT: "1"
+      TRANSLATE_ES: "0"            # apágalo mientras no uses traductor real
+      USD_RATE: "0.14"             # conversión demo CNY->USD opcional
+    restart: unless-stopped
 
 volumes:
-  pgdata:
+  rabbitmq_data:

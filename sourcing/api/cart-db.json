@@ -1,0 +1,19 @@
+{
+  "orders": [
+    {
+      "orderId": "3187f319-9069-443e-bd0d-a761e1c4fc2b",
+      "status": "READY_IN_WAREHOUSE",
+      "items": [
+        {
+          "id": "https://item.taobao.com/item.htm?id=642099861838",
+          "title": "Demo Taobao",
+          "qty": 2,
+          "priceUsd": 39.86,
+          "url": "https://item.taobao.com/item.htm?id=642099861838"
+        }
+      ],
+      "totalUsd": 79.72,
+      "createdAt": "2025-09-18T02:46:31.581Z"
+    }
+  ]
+}

@@ -15,7 +15,7 @@
     button { cursor: pointer; background: #111; color: #fff; font-weight: 600; }
     button.secondary { background: #f3f3f3; color: #111; }
     .status { padding: 10px 12px; background: #f7f7f7; border-radius: 10px; white-space: pre-wrap; line-height: 1.4; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; margin-top: 14px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; margin-top: 14px; }
     .card { border: 1px solid #eee; border-radius: 16px; overflow: hidden; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
     .thumb { width: 100%; aspect-ratio: 1/1; object-fit: cover; background: #fafafa; display: block; }
     .card-body { padding: 10px 12px; }
@@ -24,8 +24,24 @@
     .price { font-size: 16px; font-weight: 700; }
     .idline { font-family: ui-monospace, monospace; font-size: 12px; color: #555; display:flex; align-items:center; gap:8px; }
     .muted { color: #777; }
-    .error { color: #b00020; }
+    .qty { display:flex; gap:6px; align-items:center; }
+    .pill { border:1px solid #ddd; padding:4px 8px; border-radius:999px; background:#f7f7f7; font-size:12px; }
     a { color: #0b6bf2; text-decoration: none; }
+    /* carrito */
+    .cart { margin-top: 22px; border:1px solid #eee; border-radius:16px; padding:12px; background:#fff; }
+    .cart h3 { margin:0 0 8px; }
+    .cart-item { display:grid; grid-template-columns: 64px 1fr auto; gap:10px; padding:8px 0; border-bottom:1px dashed #eee; }
+    .cart-item:last-child { border-bottom:0; }
+    .cart-img { width:64px; height:64px; object-fit:cover; border-radius:10px; background:#f5f5f5; }
+    .total { display:flex; justify-content:space-between; align-items:center; margin-top:10px; }
+    .cart-row{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #eee}
+.cart-title{font-size:14px;line-height:1.3}
+.cart-qty{display:flex;align-items:center;gap:6px}
+.cart-qty button{width:28px;height:28px;border:1px solid #ddd;border-radius:8px;background:#f7f7f7;cursor:pointer}
+.cart-qty input{width:46px;text-align:center;border:1px solid #ddd;border-radius:8px;padding:4px}
+.cart-price{font-weight:600}
+.cart-total{display:flex;justify-content:flex-end;padding-top:8px;font-size:15px}
+
   </style>
 </head>
 <body>
@@ -66,161 +82,259 @@
   <h3 style="margin-top:18px">Resultados</h3>
   <div id="grid" class="grid"></div>
 
+  <!-- Carrito -->
+   <h3 style="margin-top:22px">Carrito</h3>
+<div id="cartBox" class="status">—</div>
+<div style="display:flex;justify-content:flex-end;margin-top:10px">
+  <button id="buyNow">Comprar ahora</button>
+</div>
+
+
   <script>
-    const $ = (s) => document.querySelector(s);
-    const apiBase = () => $('#apiBase').value.replace(/\/+$/, '');
+  const $ = (s) => document.querySelector(s);
+  const apiBase = () => $('#apiBase').value.replace(/\/+$/, '');
+  const delay = (ms) => new Promise(r => setTimeout(r, ms));
 
-    function renderStatus(s) {
-      $('#status').textContent = typeof s === 'string' ? s : JSON.stringify(s, null, 2);
-    }
+  // >>> NUEVO: control de concurrencia y resultados "pegajosos"
+  let lastPollToken = 0;      // solo el último poll puede escribir en UI
+  let lastGoodItems = [];     // si un intento trae 0, conservamos los buenos
 
-    function renderItems(items = []) {
+  function renderStatus(s) {
+    $('#status').textContent = typeof s === 'string' ? s : JSON.stringify(s, null, 2);
+  }
+
+  // Usa SIEMPRE el proxy de imágenes
+  function renderItems(items = []) {
   const grid = $('#grid');
   grid.innerHTML = '';
   if (!items.length) {
     grid.innerHTML = '<div class="muted">Sin items.</div>';
     return;
   }
+
   for (const it of items) {
-    // 👉 usa el proxy de tu API para evitar hotlink
+    // usa el proxy de imagen de tu API
     const img = it.image ? `${apiBase()}/image?u=${encodeURIComponent(it.image)}` : '';
     const title = it.title || '(sin título)';
-    const price = (it.price != null) ? it.price : '—';
-    const currency = it.currency || '';
-    const card = document.createElement('div');
+    const cny   = ensurePriceCNY(it);              // CNY real o inventado
+    const usd   = toUSD(cny);                      // conversión demo
+    const card  = document.createElement('div');
     card.className = 'card';
     card.innerHTML = `
       <a href="${it.url}" target="_blank" rel="noopener">
-        <img class="thumb" src="${img}" referrerpolicy="no-referrer" onerror="this.src=''; this.style.background='#f0f0f0'" alt="">
+        <img class="thumb" src="${img}" onerror="this.src=''; this.style.background='#f0f0f0'" alt="">
       </a>
       <div class="card-body">
         <div class="title" title="${title}">${title}</div>
-        <div class="meta">
-          <span class="price">${price}</span>
-          <span class="muted">${currency}</span>
-        </div>
+        <div class="meta"><span class="price">USD ${usd.toFixed(2)}</span> <span class="muted">/ CNY ${cny.toFixed(2)}</span></div>
         <div class="muted" style="margin-top:6px"><a href="${it.url}" target="_blank">Ver producto</a></div>
+        <div style="margin-top:8px">
+          <button class="secondary" data-act="add">Añadir al carrito</button>
+        </div>
       </div>
     `;
     grid.appendChild(card);
+
+    // handler: añade al carrito
+    card.querySelector('[data-act="add"]').onclick = () => {
+      cartAdd({
+        id: it.url,                     // usamos la URL como id
+        title,
+        priceUsd: usd,
+        url: it.url
+      });
+    };
   }
 }
 
-    // ---------- Deep link helpers ----------
-    function buildDeepLink(id) {
-      const url = new URL(location.href);
-      url.searchParams.set('api', $('#apiBase').value.trim());
-      url.searchParams.set('id', id.trim());
-      return url.toString();
+
+  function buildDeepLink(id) {
+    const url = new URL(location.href);
+    url.searchParams.set('api', $('#apiBase').value.trim());
+    url.searchParams.set('id', id.trim());
+    return url.toString();
+  }
+  function updateDeepLink(id) {
+    const a = $('#deeplink');
+    if (id) { a.href = buildDeepLink(id); a.style.display = 'inline'; a.textContent = 'Abrir link'; }
+    else { a.style.display = 'none'; }
+  }
+  async function copyDeepLink() {
+    const id = $('#reqId').value.trim();
+    if (!id) { alert('No hay Request ID aún'); return; }
+    try { await navigator.clipboard.writeText(buildDeepLink(id)); } catch {}
+    renderStatus('Link copiado al portapapeles ✅');
+  }
+
+  async function fetchResultsWithRetry(id, tries = 8, waitMs = 1000) {
+    for (let i = 0; i < tries; i++) {
+      try {
+        const rs = await fetch(apiBase() + '/purchase-requests/' + id + '/results').then(r => r.json());
+        if (rs && Array.isArray(rs.items) && rs.items.length > 0) return rs;
+      } catch {}
+      await delay(waitMs);
+    }
+    try { return await fetch(apiBase() + '/purchase-requests/' + id + '/results').then(r => r.json()); }
+    catch { return { items: [], count: 0 }; }
+  }
+
+  // >>> CAMBIADO: no limpiar la grilla al iniciar, usar token y mantener good items
+  async function pollStatus(id) {
+    const myToken = ++lastPollToken;   // mi poll es el más nuevo
+    renderStatus('Consultando estado…');
+    // OJO: NO llamamos renderItems([]); dejamos lo último bueno en pantalla
+    $('#rid').textContent = id;
+    updateDeepLink(id);
+
+    const maxTries = 20;
+    for (let i = 0; i < maxTries; i++) {
+      if (myToken !== lastPollToken) return; // hay un poll más nuevo: aborto
+      const st = await fetch(apiBase() + '/purchase-requests/' + id).then(r => r.json()).catch(() => null);
+      if (st) renderStatus(st);
+      if (st && (st.status === 'COMPLETED' || st.status === 'FAILED')) break;
+      await delay(1500);
     }
 
-    function updateDeepLink(id) {
-      const a = $('#deeplink');
-      if (id) {
-        a.href = buildDeepLink(id);
-        a.style.display = 'inline';
-        a.textContent = 'Abrir link';
-      } else {
-        a.style.display = 'none';
-      }
-    }
+    if (myToken !== lastPollToken) return; // abort si quedó viejo
 
-    async function copyDeepLink() {
-      const id = $('#reqId').value.trim();
-      if (!id) { alert('No hay Request ID aún'); return; }
-      const link = buildDeepLink(id);
-      try { await navigator.clipboard.writeText(link); } catch {}
-      renderStatus('Link copiado al portapapeles ✅');
-    }
+    const rs = await fetchResultsWithRetry(id, 8, 1000);
+    const newItems = Array.isArray(rs?.items) ? rs.items : [];
 
-    // ---------- Robust fetch de resultados ----------
-    async function fetchResultsWithRetry(id, tries = 8, waitMs = 1000) {
-      for (let i = 0; i < tries; i++) {
-        try {
-          const rs = await fetch(apiBase() + '/purchase-requests/' + id + '/results').then(r => r.json());
-          if (rs && Array.isArray(rs.items) && rs.items.length > 0) {
-            return rs; // ✅ ya hay items
-          }
-        } catch {}
-        await new Promise(r => setTimeout(r, waitMs));
-      }
-      // Último intento, devolvemos lo que haya
-      try { return await fetch(apiBase() + '/purchase-requests/' + id + '/results').then(r => r.json()); }
-      catch { return { items: [], count: 0 }; }
-    }
+    if (myToken !== lastPollToken) return; // abort si quedó viejo
 
-    // ---------- Flujos ----------
-    async function createRequest() {
-      const lines = $('#urls').value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-      if (!lines.length) {
-        alert('Pega al menos 1 URL');
-        return;
-      }
-      renderStatus('Creando solicitud…');
-      const res = await fetch(apiBase() + '/purchase-requests', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ urls: lines })
-      });
-      if (!res.ok) {
-        renderStatus('Error al crear: ' + res.status);
-        return;
-      }
-      const json = await res.json();
-      $('#reqId').value = json.requestId;
-      $('#rid').textContent = json.requestId;
-      updateDeepLink(json.requestId);
-      pollStatus(json.requestId);
+    if (newItems.length > 0) {
+      lastGoodItems = newItems;
+      renderItems(newItems);
+    } else {
+      // “pegajoso”: si vino vacío, mantenemos lo último bueno
+      renderItems(lastGoodItems);
     }
+  }
 
-    async function pollStatus(id) {
-      renderStatus('Consultando estado…');
-      renderItems([]);
+  async function createRequest() {
+    const lines = $('#urls').value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    if (!lines.length) { alert('Pega al menos 1 URL'); return; }
+    renderStatus('Creando solicitud…');
+    const res = await fetch(apiBase() + '/purchase-requests', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ urls: lines })
+    });
+    if (!res.ok) { renderStatus('Error al crear: ' + res.status); return; }
+    const json = await res.json();
+    $('#reqId').value = json.requestId;
+    $('#rid').textContent = json.requestId;
+    updateDeepLink(json.requestId);
+    pollStatus(json.requestId);
+  }
+
+  async function fetchById() {
+    const id = $('#reqId').value.trim();
+    if (!id) { alert('Escribe un Request ID'); return; }
+    $('#rid').textContent = id;
+    updateDeepLink(id);
+    pollStatus(id);
+  }
+
+  // --- precios demo ---
+const FX = 7.15; // CNY -> USD aprox demo
+function ensurePriceCNY(it){
+  if (typeof it.price === 'number' && isFinite(it.price) && it.price > 0) return it.price;
+  // inventamos un CNY determinista a partir de la URL (para que no cambie al refrescar)
+  let hash = 0; for (let i=0;i<it.url.length;i++) hash = (hash*31 + it.url.charCodeAt(i))|0;
+  const base = 180 + (Math.abs(hash) % 320); // 180..499 CNY
+  return Math.round(base*100)/100;
+}
+function toUSD(cny){ return Math.round((cny/FX)*100)/100; }
+
+// --- carrito (localStorage) ---
+const CART_KEY = 'impodemo_cart_v1';
+let cart = [];
+try { cart = JSON.parse(localStorage.getItem(CART_KEY) || '[]'); } catch {}
+
+function saveCart(){ localStorage.setItem(CART_KEY, JSON.stringify(cart)); }
+function cartFind(id){ return cart.findIndex(x => x.id === id); }
+
+function cartAdd({id, title, priceUsd, url, qty=1}){
+  const i = cartFind(id);
+  if (i >= 0) cart[i].qty += qty;
+  else cart.push({ id, title, priceUsd, url, qty });
+  saveCart(); renderCart();
+}
+
+function cartSetQty(id, qty){
+  const i = cartFind(id);
+  if (i < 0) return;
+  cart[i].qty = Math.max(0, parseInt(qty||'0',10));
+  if (cart[i].qty === 0) cart.splice(i,1);
+  saveCart(); renderCart();
+}
+
+function cartTotalUSD(){ return cart.reduce((s,x)=> s + (x.priceUsd||0)*x.qty, 0); }
+
+function renderCart(){
+  const box = $('#cartBox');
+  if (!cart.length){
+    box.innerHTML = '—';
+    return;
+  }
+  box.innerHTML = cart.map(it => `
+    <div class="cart-row">
+      <div class="cart-title">${it.title}</div>
+      <div class="cart-qty">
+        <button data-dec="${it.id}">−</button>
+        <input data-id="${it.id}" value="${it.qty}">
+        <button data-inc="${it.id}">+</button>
+      </div>
+      <div class="cart-price">USD ${(it.priceUsd||0).toFixed(2)}</div>
+    </div>
+  `).join('') + `
+    <div class="cart-total"><strong>Total</strong>&nbsp;USD ${cartTotalUSD().toFixed(2)}</div>
+  `;
+
+  // eventos cantidad
+  box.querySelectorAll('button[data-inc]').forEach(b=>{
+    b.onclick = () => cartSetQty(b.dataset.inc, (cart[cartFind(b.dataset.inc)].qty||1)+1);
+  });
+  box.querySelectorAll('button[data-dec]').forEach(b=>{
+    b.onclick = () => cartSetQty(b.dataset.dec, (cart[cartFind(b.dataset.dec)].qty||1)-1);
+  });
+  box.querySelectorAll('input[data-id]').forEach(inp=>{
+    inp.onchange = () => cartSetQty(inp.dataset.id, inp.value);
+  });
+}
+
+// checkout demo: “en bodega” inmediato
+async function checkoutNow(){
+  if (!cart.length) return alert('Carrito vacío');
+  renderStatus('✅ Pedido creado — producto en bodega');
+  cart = []; saveCart(); renderCart();
+}
+
+// render inicial del carrito
+renderCart();
+$('#buyNow').onclick = checkoutNow;
+
+  // Prefill y listeners
+  $('#urls').value = 'https://detail.tmall.com/item.htm?id=574575426373';
+  $('#btnCreate').onclick = createRequest;
+  $('#btnFetch').onclick  = fetchById;
+  $('#btnCopyLink').onclick = copyDeepLink;
+
+  // Deep link al cargar
+  (function readQueryParams() {
+    const params = new URLSearchParams(location.search);
+    const api = params.get('api');
+    const id  = params.get('id');
+    if (api) $('#apiBase').value = api;
+    if (id) {
+      $('#reqId').value = id;
       $('#rid').textContent = id;
       updateDeepLink(id);
-
-      const maxTries = 20;
-      for (let i = 0; i < maxTries; i++) {
-        const st = await fetch(apiBase() + '/purchase-requests/' + id).then(r => r.json()).catch(() => null);
-        if (st) renderStatus(st);
-        if (st && (st.status === 'COMPLETED' || st.status === 'FAILED')) break;
-        await new Promise(r => setTimeout(r, 1500));
-      }
-
-      // Reintento de resultados (antibalas)
-      const rs = await fetchResultsWithRetry(id, 8, 1000);
-      renderItems(rs?.items || []);
+      pollStatus(id);
     }
+  })();
+</script>
 
-    async function fetchById() {
-      const id = $('#reqId').value.trim();
-      if (!id) { alert('Escribe un Request ID'); return; }
-      $('#rid').textContent = id;
-      updateDeepLink(id);
-      await pollStatus(id);
-    }
-
-    // Prefill con tu huodong de ejemplo
-    $('#urls').value = 'https://huodong.taobao.com/wow/a/act/tao/dailygroup/23509/24308/wupr?spm=a21bo.jianhua/a.yingxiao.d1_1.5af92a89XUqyBp&wh_pid=daily-554070&itemId=574575426373%2C642099861838%2C640341374829%2C545428572834&custom_content_source=608.29877528';
-
-    // Listeners
-    $('#btnCreate').onclick = createRequest;
-    $('#btnFetch').onclick = fetchById;
-    $('#btnCopyLink').onclick = copyDeepLink;
-
-    // Lee query params al cargar (autopoll)
-    (function readQueryParams() {
-      const params = new URLSearchParams(location.search);
-      const api = params.get('api');
-      const id  = params.get('id');
-      if (api) $('#apiBase').value = api;
-      if (id) {
-        $('#reqId').value = id;
-        $('#rid').textContent = id;
-        updateDeepLink(id);
-        pollStatus(id);
-      }
-    })();
-  </script>
 </body>
 </html>

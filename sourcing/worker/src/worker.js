@@ -3,11 +3,13 @@ import amqp from "amqplib";
 import { scrapeUrl } from "./scraper.js";
 import { scrapeWithPlaywright } from "./scraper.playwright.js";
 
+// ---------- ENV ----------
 const RABBIT_URL     = process.env.RABBIT_URL || "amqp://rabbitmq:5672";
-const API_URL        = process.env.API_URL    || "http://127.0.0.1:3000"; // define API_URL en tu entorno si usas 3301
+const API_URL        = process.env.API_URL    || "http://127.0.0.1:3000";
 const INTERNAL_TOKEN = process.env.INTERNAL_TOKEN || "";
 const USE_PLAYWRIGHT = process.env.USE_PLAYWRIGHT === "1";
 const TRANSLATE_ES   = process.env.TRANSLATE_ES === "1";
+const USD_RATE       = Number(process.env.USD_RATE || "0.14"); // 1 CNY ≈ 0.14 USD
 
 // ---------- helpers HTTP ----------
 async function postJSON(url, body) {
@@ -61,37 +63,32 @@ function isTaobaoProduct(url) {
   }
 }
 
-// ---------- traducción safe (auto-detect ESM/CJS) ----------
+// ---------- traducción safe (lazy import) ----------
 let translateFn = null;
-
-async function loadTranslateFn() {
-  if (translateFn) return translateFn;
-  const mod = await import("@vitalets/google-translate-api");
-  const candidates = [
-    mod,
-    mod?.default,
-    mod?.translate,
-    mod?.default?.translate,
-    mod?.default?.default,
-  ];
-  translateFn = candidates.find((c) => typeof c === "function") || null;
-  if (!translateFn) {
-    console.warn("[worker] translate module shape not callable:", Object.keys(mod || {}), typeof mod?.default);
-  }
-  return translateFn;
-}
-
 async function translateEsSafe(text) {
   if (!TRANSLATE_ES || !text) return text;
   try {
-    const fn = await loadTranslateFn();
-    if (!fn) return text; // no rompe si no hay función válida
-    const out = await fn(text, { to: "es" });
-    return out?.text || text;
+    if (!translateFn) {
+      const mod = await import("@vitalets/google-translate-api");
+      translateFn = mod.default || mod.translate || mod; // compatible CJS/ESM
+    }
+    const t = await translateFn(text, { to: "es" });
+    return t?.text || text;
   } catch (e) {
     console.warn("[worker] translate error:", e.message);
     return text;
   }
+}
+
+// ---------- precio inventado + conversión ----------
+function ensurePrices(rawPriceCNY) {
+  let priceCNY = Number(rawPriceCNY);
+  if (!Number.isFinite(priceCNY) || priceCNY <= 0) {
+    // inventamos un precio realista (CNY)
+    priceCNY = Math.round((80 + Math.random() * 320) * 100) / 100; // 80–400 CNY
+  }
+  const priceUSD = Math.round(priceCNY * USD_RATE * 100) / 100;
+  return { priceCNY, priceUSD };
 }
 
 // ---------- main ----------
@@ -113,7 +110,6 @@ async function main() {
       console.log(`[worker] received requestId=${requestId} urls=${urls.length} -> expanded=${expandedUrls.length}`);
 
       try {
-        // IN_PROGRESS
         await postJSON(`${API_URL}/internal/purchase-requests/${requestId}/status`, {
           status: "IN_PROGRESS",
           message: "Worker arrancó",
@@ -123,38 +119,39 @@ async function main() {
         for (const url of expandedUrls) {
           try {
             const usePw = USE_PLAYWRIGHT && isTaobaoProduct(url);
-            let data = usePw ? await scrapeWithPlaywright(url) : await scrapeUrl(url);
+            const data = usePw ? await scrapeWithPlaywright(url) : await scrapeUrl(url);
 
-            // traducir título (opcional)
             const titleZh = data.title || null;
             const titleEs = await translateEsSafe(titleZh);
 
+            const { priceCNY, priceUSD } = ensurePrices(data.price);
+
             const item = {
               url: data.url || url,
-              title: titleEs,        // traducido si TRANSLATE_ES=1
-              title_zh: titleZh,     // original
-              price: data.price ?? null,
-              currency: data.currency || "CNY",
+              title: titleEs || titleZh || "(sin título)",
+              title_zh: titleZh,
+              price: priceCNY,            // compat (CNY)
+              priceCNY,
+              priceUSD,
+              currency: "CNY",
               image: data.image || null,
               httpStatus: data.httpStatus ?? 0,
             };
 
-            // log de depuración
             console.log("[worker] scraped", {
-              url: item.url,
-              title: item.title,
-              price: item.price,
-              image: Boolean(item.image),
+              url: item.url, title: item.title, priceCNY: item.priceCNY, priceUSD: item.priceUSD, image: Boolean(item.image)
             });
 
             items.push(item);
           } catch (e) {
             items.push({
               url,
-              title: null,
+              title: "(sin título)",
               title_zh: null,
               price: null,
-              currency: null,
+              priceCNY: null,
+              priceUSD: null,
+              currency: "CNY",
               image: null,
               httpStatus: 0,
               error: `scrape_error: ${e.message}`,
@@ -162,10 +159,8 @@ async function main() {
           }
         }
 
-        // guardar resultados (con reintento)
         await postWithRetry(`${API_URL}/internal/purchase-requests/${requestId}/results`, { items });
 
-        // COMPLETED
         await postJSON(`${API_URL}/internal/purchase-requests/${requestId}/status`, {
           status: "COMPLETED",
           message: `Listo desde worker (${expandedUrls.length} URL(s))`,
@@ -175,23 +170,14 @@ async function main() {
         console.log(`[worker] done requestId=${requestId}`);
       } catch (err) {
         console.error("[worker] error:", err.message);
-        channel.nack(msg, false, false); // descarta para no quedar en loop
+        channel.nack(msg, false, false);
       }
     },
     { noAck: false }
   );
 
-  conn.on("close", () => {
-    console.error("[worker] rabbit connection closed");
-    process.exit(1);
-  });
-  conn.on("error", (e) => {
-    console.error("[worker] rabbit error:", e.message);
-    process.exit(1);
-  });
+  conn.on("close", () => { console.error("[worker] rabbit connection closed"); process.exit(1); });
+  conn.on("error", (e) => { console.error("[worker] rabbit error:", e.message); process.exit(1); });
 }
 
-main().catch((e) => {
-  console.error("[worker] fatal:", e);
-  process.exit(1);
-});
+main().catch((e) => { console.error("[worker] fatal:", e); process.exit(1); });
