@@ -126,10 +126,10 @@ export default function BodegaPage() {
           <h1 className="panel-title">Mis pedidos</h1>
           <p className="panel-sub">Crea y visualiza tus órdenes de bodega.</p>
 
-{error && (
-  <div className="error">
-    {Array.isArray(error)
-      ? error.map((e, i) => (
+    {error && (
+      <div className="error">
+        {Array.isArray(error)
+          ? error.map((e, i) => (
           <p key={i}>{typeof e === 'object' ? JSON.stringify(e) : e}</p>
         ))
       : typeof error === 'object'
