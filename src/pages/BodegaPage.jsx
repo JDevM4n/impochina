@@ -126,7 +126,17 @@ export default function BodegaPage() {
           <h1 className="panel-title">Mis pedidos</h1>
           <p className="panel-sub">Crea y visualiza tus órdenes de bodega.</p>
 
-          {error && <div className="alert error">{error}</div>}
+{error && (
+  <div className="error">
+    {Array.isArray(error)
+      ? error.map((e, i) => (
+          <p key={i}>{typeof e === 'object' ? JSON.stringify(e) : e}</p>
+        ))
+      : typeof error === 'object'
+      ? JSON.stringify(error)
+      : error}
+  </div>
+)}
 
           <form className="form-grid" onSubmit={onCreate}>
             <div className="field">
