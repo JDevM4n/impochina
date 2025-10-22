@@ -1,23 +1,42 @@
-import os
-import grpc
+"""Cliente gRPC compartido para Auth (validación de tokens)."""
 from functools import lru_cache
 from typing import Tuple
-from app.grpc import auth_pb2, auth_pb2_grpc  # se generan en build
+import app.grpc.auth_pb2 as auth_pb2
+import app.grpc.auth_pb2_grpc as auth_pb2_grpc
 
-def _addr() -> str:
-    # Ahora usas el Auth que ya publicaste en 50052
-    return os.environ.get("AUTH_GRPC_ADDR", "host.docker.internal:50052")
 
-@lru_cache(maxsize=1)
-def _stub() -> auth_pb2_grpc.AuthServiceStub:
-    ch = grpc.insecure_channel(_addr())
-    return auth_pb2_grpc.AuthServiceStub(ch)
+import grpc
 
-def validate_token(token: str) -> Tuple[bool, str, str]:
-    """Devuelve (valid, username, message)."""
+from app.grpc import auth_pb2, auth_pb2_grpc
+
+
+@lru_cache(maxsize=2)
+def _stub(addr: str) -> auth_pb2_grpc.AuthServiceStub:
+    """Crea y cachea el stub del servicio Auth en la dirección dada."""
+    channel = grpc.insecure_channel(addr)
+    return auth_pb2_grpc.AuthServiceStub(channel)
+
+
+def validate_token(addr: str, token: str) -> Tuple[bool, str, str]:
+    """Valida un token contra Auth gRPC. Retorna (valid, username, message)."""
     try:
-        req = auth_pb2.ValidateRequest(token=token)
-        res = _stub().ValidateToken(req, timeout=3.0)
-        return res.valid, res.username, res.message
-    except Exception as e:
-        return False, "", f"gRPC error: {e}"
+        # Ajusta el nombre del request al de tu .proto real:
+        req = getattr(auth_pb2, "ValidateTokenRequest", None)
+        if req is None:
+            # Compatibilidad si tu mensaje se llama distinto (p. ej. ValidateRequest)
+            req = getattr(auth_pb2, "ValidateRequest")
+        request = req(token=token)
+
+        # Idem para el método remoto (ValidateToken o Validate)
+        stub = _stub(addr)
+        if hasattr(stub, "ValidateToken"):
+            resp = stub.ValidateToken(request, timeout=3.0)
+        else:
+            resp = stub.Validate(request, timeout=3.0)
+
+        valid = bool(getattr(resp, "valid", False))
+        username = getattr(resp, "username", "")
+        message = getattr(resp, "message", "")
+        return valid, username, message
+    except grpc.RpcError as exc:
+        return False, "", f"gRPC error: {exc}"

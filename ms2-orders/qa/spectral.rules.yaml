@@ -1,0 +1,67 @@
+﻿extends:
+  - spectral:oas   # reglas built-in válidas
+
+rules:
+  # ---- Reglas built-in que sí existen en spectral:oas ----
+  operation-operationId-unique: error
+  operation-operationId: warn
+  openapi-tags: warn
+  operation-tags: warn
+
+  # ---- Reglas personalizadas (requerir summary/description/tags) ----
+  require-operation-summary:
+    description: "Cada operación debe tener summary"
+    message: "Falta 'summary' en la operación"
+    severity: warn
+    given: "$.paths[*][*]"
+    then:
+      field: summary
+      function: truthy
+
+  require-operation-description:
+    description: "Cada operación debe tener description"
+    message: "Falta 'description' en la operación"
+    severity: warn
+    given: "$.paths[*][*]"
+    then:
+      field: description
+      function: truthy
+
+  require-operation-tags:
+    description: "Cada operación debe tener al menos un tag"
+    message: "Faltan 'tags' o están vacíos"
+    severity: warn
+    given: "$.paths[*][*]"
+    then:
+      field: tags
+      function: truthy
+
+  # ---- Al menos una respuesta 2xx definida ----
+  require-success-response:
+    description: "Cada operación debe definir al menos una respuesta 2xx"
+    message: "Falta respuesta de éxito (2xx)"
+    severity: warn
+    given: "$.paths[*][*].responses"
+    then:
+      function: schema
+      functionOptions:
+        schema:
+          type: object
+          patternProperties:
+            "^2\\d\\d$": {}
+          minProperties: 1
+
+  # ---- Al menos una respuesta de error 4xx/5xx ----
+  require-error-response:
+    description: "Cada operación debe definir al menos una respuesta 4xx o 5xx"
+    message: "Falta respuesta de error (4xx/5xx)"
+    severity: warn
+    given: "$.paths[*][*].responses"
+    then:
+      function: schema
+      functionOptions:
+        schema:
+          type: object
+          patternProperties:
+            "^(4|5)\\d\\d$": {}
+          minProperties: 1
