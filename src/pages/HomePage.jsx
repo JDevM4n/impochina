@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../hooks/useAuth";
 import * as Switch from "@radix-ui/react-switch";
+import { sourcingApi } from "../api/sourcingApi";
 import "../styles/Home.css";
 
 export default function HomePage() {
@@ -12,7 +13,8 @@ export default function HomePage() {
   const [darkMode, setDarkMode] = useState(false);
   const [openFAQ, setOpenFAQ] = useState(null);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
-  const { logout } = useAuth();
+  const [searchResult, setSearchResult] = useState(null);
+  const { logout, user } = useAuth();
   const nav = useNavigate();
 
   const heroImages = [
@@ -38,13 +40,75 @@ export default function HomePage() {
 
   const buscar = async (e) => {
     e.preventDefault();
+    if (!url.trim()) {
+      alert("❌ Por favor ingresa una URL válida");
+      return;
+    }
+
     setLoading(true);
+    setSearchResult(null);
+
     try {
-      await new Promise((res) => setTimeout(res, 2000));
-      alert("✅ Producto encontrado con éxito!");
+      console.log('🚀 Starting search for URL:', url);
+      
+      // 1. Crear solicitud de scraping
+      const response = await sourcingApi.createPurchaseRequest([url]);
+      const { requestId } = response;
+
+      console.log('📨 Request created with ID:', requestId);
+
+      // 2. Polling para obtener resultados
+      const results = await waitForResults(requestId);
+      
+      console.log('🎉 Search completed successfully:', results);
+      
+      if (results.items && results.items.length > 0) {
+        setSearchResult(results);
+      } else {
+        alert("⚠️ No se encontraron productos para esta URL");
+      }
+        
+    } catch (error) {
+      console.error('💥 Error en la búsqueda:', error);
+      alert(`❌ Error al buscar el producto: ${error.message}`);
     } finally {
       setLoading(false);
     }
+  };
+
+  const waitForResults = async (requestId, maxAttempts = 20) => {
+    console.log(`⏳ Starting polling for request: ${requestId}`);
+    
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        // Esperar 2 segundos entre intentos
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        console.log(`🔍 Polling attempt ${attempt + 1}/${maxAttempts} for ${requestId}`);
+        
+        // Obtener estado
+        const statusResponse = await sourcingApi.getPurchaseRequestStatus(requestId);
+        console.log('📊 Current status:', statusResponse.status);
+        
+        if (statusResponse.status === 'COMPLETED') {
+          // Obtener resultados
+          const resultsResponse = await sourcingApi.getPurchaseRequestResults(requestId);
+          console.log('📦 Results received:', resultsResponse);
+          return resultsResponse;
+        } else if (statusResponse.status === 'FAILED') {
+          throw new Error('La búsqueda falló en el servidor: ' + (statusResponse.error || 'Error desconocido'));
+        }
+        // Si sigue en progreso, continuar polling
+        
+      } catch (error) {
+        console.error(`❌ Error in polling attempt ${attempt + 1}:`, error);
+        if (attempt === maxAttempts - 1) {
+          throw new Error(`Tiempo de espera agotado: ${error.message}`);
+        }
+      }
+    }
+    
+    throw new Error('Tiempo de espera agotado después de ' + maxAttempts + ' intentos');
   };
 
   const onLogout = async () => {
@@ -86,7 +150,7 @@ export default function HomePage() {
   const faqData = [
     {
       question: "¿Cómo funciona la búsqueda de productos?",
-      answer: "Simplemente pega el enlace del producto de 1688 en el campo de búsqueda.",
+      answer: "Simplemente pega el enlace del producto de 1688 en el campo de búsqueda y nuestro sistema se encargará del resto.",
     },
     {
       question: "¿Es seguro usar Impochina?",
@@ -172,7 +236,7 @@ export default function HomePage() {
                 <div className="search-box">
                   <input
                     type="url"
-                    placeholder="Pega aquí el enlace del producto"
+                    placeholder="Pega aquí el enlace del producto de 1688, Taobao o Tmall"
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
                     required
@@ -190,6 +254,82 @@ export default function HomePage() {
                   </motion.button>
                 </div>
               </motion.form>
+
+              {/* Loading State */}
+              {loading && (
+                <motion.div 
+                  className="loading-results"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                >
+                  <div className="loading"></div>
+                  <p>🔍 Buscando productos... Esto puede tomar unos segundos</p>
+                </motion.div>
+              )}
+
+              {/* Mostrar resultados si existen */}
+              {searchResult && searchResult.items && searchResult.items.length > 0 && (
+                <motion.div 
+                  className="search-results"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5 }}
+                >
+                  <h3>🎉 ¡Productos Encontrados!</h3>
+                  <p>Se encontraron {searchResult.items.length} producto(s)</p>
+                  
+                  <div className="results-grid">
+                    {searchResult.items.map((item, index) => (
+                      <motion.div 
+                        key={index} 
+                        className="product-card"
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: index * 0.1 }}
+                      >
+                        {item.image && (
+                          <img 
+                            src={item.image} 
+                            alt={item.title}
+                            onError={(e) => {
+                              e.target.src = 'https://via.placeholder.com/300x200/4A90E2/FFFFFF?text=Imagen+No+Disponible';
+                            }}
+                          />
+                        )}
+                        <div className="product-info">
+                          <h4>{item.title}</h4>
+                          {item.title_zh && (
+                            <p className="product-title-zh">{item.title_zh}</p>
+                          )}
+                          <div className="product-prices">
+                            {item.priceCNY && (
+                              <p className="price-cny">💰 {item.priceCNY} CNY</p>
+                            )}
+                            {item.priceUSD && (
+                              <p className="price-usd">💵 {item.priceUSD} USD</p>
+                            )}
+                          </div>
+                          <div className="product-actions">
+                            <a 
+                              href={item.url} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="btn-product-link"
+                            >
+                              🔗 Ver en sitio original
+                            </a>
+                            <button className="btn-save">
+                              💾 Guardar en bodega
+                            </button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+
+          
             </div>
 
             <motion.div
