@@ -9,15 +9,19 @@ export default function LoginPage() {
   const [username, setU] = useState("");
   const [password, setP] = useState("");
   const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(false); // 👈 nuevo estado
 
   const onSubmit = async (e) => {
     e.preventDefault();
     setErr("");
+    setLoading(true); // 👈 activa loader
     try {
       await login(username, password);
       nav("/home");
     } catch (e) {
       setErr(e.message);
+    } finally {
+      setLoading(false); // 👈 desactiva loader
     }
   };
 
@@ -47,6 +51,7 @@ export default function LoginPage() {
                 value={username}
                 onChange={(e) => setU(e.target.value)}
                 placeholder="Usuario"
+                required
               />
             </div>
             <div className="input-group">
@@ -56,10 +61,11 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setP(e.target.value)}
                 placeholder="Contraseña"
+                required
               />
             </div>
-            <button className="login-btn" type="submit">
-              Entrar
+            <button className="login-btn" type="submit" disabled={loading}>
+              {loading ? "Cargando..." : "Entrar"}
             </button>
           </form>
           <a href="#" className="forgot-link">
