@@ -1,15 +1,44 @@
+version: "3.9"
 services:
+  # Base de datos
   mongo:
     image: mongo:6.0
     container_name: ms2-mongo
     restart: unless-stopped
     ports:
-      - "27019:27017"          # evita chocar con otros Mongo locales
+      - "27017:27017"
     environment:
       MONGO_INITDB_DATABASE: impochina_orders
     volumes:
       - mongo_data:/data/db
 
+  # Auth Service (necesario para validar tokens)
+  auth-service:
+    image: auth-auth-service
+    container_name: auth-service
+    restart: unless-stopped
+    environment:
+      SECRET_KEY: mysecretkey
+      JWT_ALG: HS256
+      MONGO_URL: mongodb://mongodb-auth:27017
+      MONGO_DB: auth_db
+    depends_on:
+      - mongodb-auth
+    ports:
+      - "8001:8001"
+      - "50052:50051"  # gRPC port
+
+  # Base de datos para auth-service
+  mongodb-auth:
+    image: mongo:6.0
+    container_name: mongodb-auth
+    restart: unless-stopped
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongodb_auth_data:/data/db
+
+  # Servicio de órdenes
   ms2-orders:
     build:
       context: .
@@ -19,15 +48,16 @@ services:
     environment:
       MONGO_URL: mongodb://mongo:27017
       MONGO_DB: impochina_orders
-
-      AUTH_GRPC_ADDR: host.docker.internal:50052   # <- importante
-
-      ALLOW_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      AUTH_GRPC_ADDR: auth-service:50051
+      SECRET_KEY: mysecretkey
+      ALLOW_ORIGINS: http://localhost:3000
       PORT: "8000"
     depends_on:
       - mongo
+      - auth-service
     ports:
       - "8000:8000"
 
 volumes:
   mongo_data:
+  mongodb_auth_data:
