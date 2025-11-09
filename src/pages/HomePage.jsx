@@ -191,6 +191,15 @@ export default function HomePage() {
               </Switch.Root>
             </div>
             <motion.a
+    className="nav-link"
+    href="/reportes"
+    whileHover={{ scale: 1.1 }}
+    whileTap={{ scale: 0.95 }}
+  >
+    📊 Reportes
+  </motion.a>
+  
+            <motion.a
               className="nav-link"
               href="/bodega"
               whileHover={{ scale: 1.1 }}

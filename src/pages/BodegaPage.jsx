@@ -1,7 +1,8 @@
 // src/pages/BodegaPage.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../hooks/useAuth";
-import { getMyOrders, createOrder } from "../api/Service2";
+import { apiFetch, getOrdersBase } from '../api/apiService';
+
 import "../styles/Bodega.css";
 
 export default function BodegaPage() {

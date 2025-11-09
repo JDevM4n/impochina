@@ -33,6 +33,7 @@ export default function Navbar() {
               <Link to="/perfil" className="nav-link">
                 Perfil
               </Link>
+                <Link to="/dashboard">Dashboard</Link> 
               <button className="btn-logout" onClick={handleLogout}>
                 Salir
               </button>
