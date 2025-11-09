@@ -1,4 +1,4 @@
-# En app/grpc_server.py del auth-service
+# En auth-service/app/grpc_server.py - MODIFICAR ESTE ARCHIVO
 import os
 import time
 import jwt
@@ -6,7 +6,8 @@ import grpc
 from concurrent import futures
 from bson import ObjectId
 
-from app.db import users_collection  # Importar la colección de usuarios
+# IMPORTAR LA COLECCIÓN DE USUARIOS
+from app.db import users_collection
 from app.grpc import auth_pb2, auth_pb2_grpc
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "mysecretkey")
@@ -25,16 +26,16 @@ class AuthService(auth_pb2_grpc.AuthServiceServicer):
             if not username:
                 return auth_pb2.ValidateTokenResponse(valid=False, error="username missing")
             
-            # Obtener el usuario completo de la base de datos
+            # OBTENER EL USUARIO COMPLETO DE LA BASE DE DATOS
             db_user = users_collection.find_one({"username": username})
             if not db_user:
                 return auth_pb2.ValidateTokenResponse(valid=False, error="user not found")
             
-            # Retornar tanto username como user_id
+            # RETORNAR EL user_id CORRECTO
             return auth_pb2.ValidateTokenResponse(
                 valid=True, 
                 username=username,
-                user_id=str(db_user["_id"])  # ← Esto es lo nuevo
+                user_id=str(db_user["_id"])  # ← ESTA LÍNEA ES CLAVE
             )
             
         except jwt.ExpiredSignatureError:
@@ -47,13 +48,14 @@ class AuthService(auth_pb2_grpc.AuthServiceServicer):
 def build_grpc_server() -> grpc.Server:
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     auth_pb2_grpc.add_AuthServiceServicer_to_server(AuthService(), server)
-
-    # Habilitar reflection
+    
+    # Reflection (opcional)
+    from grpc_reflection.v1alpha import reflection
     SERVICE_NAMES = (
         auth_pb2.DESCRIPTOR.services_by_name['AuthService'].full_name,
         reflection.SERVICE_NAME,
     )
     reflection.enable_server_reflection(SERVICE_NAMES, server)
-
+    
     server.add_insecure_port(f"[::]:{GRPC_PORT}")
     return server
