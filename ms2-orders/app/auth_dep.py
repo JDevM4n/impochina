@@ -1,22 +1,28 @@
-from fastapi import Header, HTTPException, status
-from .auth_client import validate_token
+# app/auth_dep.py de ms2-orders
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPBearer
+from app.grpc_client import validate_token
+import os
 
+security = HTTPBearer()
+AUTH_GRPC_ADDR = os.getenv("AUTH_GRPC_ADDR", "auth-service:50051")
 
-def get_current_user(authorization: str = Header(None)) -> str:
-    """Extrae el Bearer token, lo valida y retorna el username."""
-    if not authorization or not authorization.lower().startswith("bearer "):
+async def get_current_user(token: str = Depends(security)):
+    try:
+        # Verificar token via gRPC
+        user_data = validate_token(AUTH_GRPC_ADDR, token.credentials)
+        
+        if not user_data or "user_id" not in user_data:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token"
+            )
+        
+        # Retornar el user_id (ObjectId como string)
+        return user_data["user_id"]
+        
+    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing Bearer token",
+            detail="Could not validate credentials"
         )
-
-    token = authorization.split(" ", 1)[1].strip()
-
-    ok, username, msg = validate_token(token) 
-    if not ok:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid token: {msg}",  
-        )
-
-    return username
