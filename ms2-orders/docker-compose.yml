@@ -1,6 +1,6 @@
-version: "3.9"
+# ms2-orders/docker-compose.yml
 services:
-  # Base de datos
+  # Base de datos de órdenes
   mongo:
     image: mongo:6.0
     container_name: ms2-mongo
@@ -11,32 +11,6 @@ services:
       MONGO_INITDB_DATABASE: impochina_orders
     volumes:
       - mongo_data:/data/db
-
-  # Auth Service (necesario para validar tokens)
-  auth-service:
-    image: auth-auth-service
-    container_name: auth-service
-    restart: unless-stopped
-    environment:
-      SECRET_KEY: mysecretkey
-      JWT_ALG: HS256
-      MONGO_URL: mongodb://mongodb-auth:27017
-      MONGO_DB: auth_db
-    depends_on:
-      - mongodb-auth
-    ports:
-      - "8001:8001"
-      - "50052:50051"  # gRPC port
-
-  # Base de datos para auth-service
-  mongodb-auth:
-    image: mongo:6.0
-    container_name: mongodb-auth
-    restart: unless-stopped
-    ports:
-      - "27018:27017"
-    volumes:
-      - mongodb_auth_data:/data/db
 
   # Servicio de órdenes
   ms2-orders:
@@ -54,10 +28,8 @@ services:
       PORT: "8000"
     depends_on:
       - mongo
-      - auth-service
     ports:
       - "8000:8000"
 
 volumes:
   mongo_data:
-  mongodb_auth_data:
