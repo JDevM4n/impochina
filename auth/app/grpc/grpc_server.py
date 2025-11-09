@@ -1,13 +1,13 @@
+# En app/grpc_server.py del auth-service
 import os
 import time
 import jwt
 import grpc
 from concurrent import futures
+from bson import ObjectId
 
+from app.db import users_collection  # Importar la colección de usuarios
 from app.grpc import auth_pb2, auth_pb2_grpc
-
-# Reflection para debug con grpcurl
-from grpc_reflection.v1alpha import reflection
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "mysecretkey")
 JWT_ALG    = os.environ.get("JWT_ALG", "HS256")
@@ -24,7 +24,19 @@ class AuthService(auth_pb2_grpc.AuthServiceServicer):
             username = payload.get("username")
             if not username:
                 return auth_pb2.ValidateTokenResponse(valid=False, error="username missing")
-            return auth_pb2.ValidateTokenResponse(valid=True, username=username)
+            
+            # Obtener el usuario completo de la base de datos
+            db_user = users_collection.find_one({"username": username})
+            if not db_user:
+                return auth_pb2.ValidateTokenResponse(valid=False, error="user not found")
+            
+            # Retornar tanto username como user_id
+            return auth_pb2.ValidateTokenResponse(
+                valid=True, 
+                username=username,
+                user_id=str(db_user["_id"])  # ← Esto es lo nuevo
+            )
+            
         except jwt.ExpiredSignatureError:
             return auth_pb2.ValidateTokenResponse(valid=False, error="token expired")
         except jwt.InvalidTokenError:
