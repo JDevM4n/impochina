@@ -38,33 +38,69 @@ async function writeJson(file, obj) {
   await fs.writeFile(file, JSON.stringify(obj, null, 2));
 }
 
-// Helper functions para el carrito JSON
+// Helper functions para el carrito JSON - VERSIÓN ROBUSTA
 async function readCartDB() {
   try {
+    await fs.access(CART_DB_PATH);
     const data = await fs.readFile(CART_DB_PATH, 'utf8');
-    return JSON.parse(data);
+    const parsed = JSON.parse(data);
+    
+    // Validar y asegurar la estructura
+    if (!parsed.cart || typeof parsed.cart !== 'object') {
+      parsed.cart = {};
+    }
+    if (!parsed.orders || !Array.isArray(parsed.orders)) {
+      parsed.orders = [];
+    }
+    
+    console.log('📁 Cart DB loaded successfully');
+    return parsed;
   } catch (error) {
-    // Retorna la estructura exacta que espera el código
-    return { 
-      orders: [], 
-      cart: {} 
-    };
+    if (error.code === 'ENOENT') {
+      console.log('🆕 Creating new cart DB with default structure');
+      // Crear el archivo inmediatamente si no existe
+      const initialData = { 
+        orders: [], 
+        cart: {} 
+      };
+      await writeCartDB(initialData);
+      return initialData;
+    }
+    console.error('❌ Error reading cart DB:', error);
+    return { orders: [], cart: {} };
   }
 }
 
 async function writeCartDB(data) {
-  await fs.writeFile(CART_DB_PATH, JSON.stringify(data, null, 2));
+  try {
+    // Validar estructura antes de escribir
+    if (!data.cart || typeof data.cart !== 'object') {
+      data.cart = {};
+    }
+    if (!data.orders || !Array.isArray(data.orders)) {
+      data.orders = [];
+    }
+    
+    // Asegurar que el directorio existe
+    const dir = path.dirname(CART_DB_PATH);
+    await fs.mkdir(dir, { recursive: true });
+    
+    // Escribir el archivo
+    await fs.writeFile(CART_DB_PATH, JSON.stringify(data, null, 2));
+    console.log('✅ Cart DB written successfully');
+  } catch (error) {
+    console.error('❌ Error writing cart DB:', error);
+    throw error;
+  }
 }
 
 // Función para inicializar el archivo del carrito si no existe
 async function initializeCartDB() {
   try {
-    await fs.access(CART_DB_PATH);
-    console.log('[api] Cart DB exists');
+    await readCartDB(); // Esto creará el archivo si no existe
+    console.log('[api] Cart DB initialized successfully');
   } catch (error) {
-    console.log('[api] Creating initial cart DB file');
-    const initialData = { orders: [], cart: {} };
-    await writeCartDB(initialData);
+    console.error('[api] Cart DB initialization failed:', error);
   }
 }
 
@@ -408,7 +444,7 @@ app.get("/orders", async (req, res) => {
 });
 
 // ------------------------------
-// Carrito de compras (JSON)
+// Carrito de compras (JSON) - VERSIÓN CORREGIDA
 // ------------------------------
 
 // Agregar producto al carrito
@@ -416,6 +452,8 @@ app.post("/cart/items", maybeRequireAuth, async (req, res) => {
   try {
     const user = req.user;
     const { product } = req.body;
+    
+    console.log('🛒 Add to cart request:', { userId: user?.id, product: product?.url });
     
     if (!user) {
       return res.status(401).json({ error: "Authentication required" });
@@ -429,9 +467,6 @@ app.post("/cart/items", maybeRequireAuth, async (req, res) => {
     const userId = user.id;
     
     // Inicializar estructura de carrito si no existe
-    if (!cartDB.cart) {
-      cartDB.cart = {};
-    }
     if (!cartDB.cart[userId]) {
       cartDB.cart[userId] = [];
     }
@@ -444,24 +479,29 @@ app.post("/cart/items", maybeRequireAuth, async (req, res) => {
     if (existingItemIndex !== -1) {
       // Actualizar cantidad si ya existe
       cartDB.cart[userId][existingItemIndex].quantity += product.quantity || 1;
+      console.log('📈 Updated existing item quantity');
     } else {
       // Agregar nuevo producto al carrito
-      cartDB.cart[userId].push({
+      const newCartItem = {
         cartItemId: Date.now().toString(),
         product: {
           url: product.url,
           title: product.title || product.title_zh || 'Producto sin nombre',
-          title_zh: product.title_zh,
-          priceCNY: product.priceCNY,
-          priceUSD: product.priceUSD,
+          title_zh: product.title_zh || product.title || '',
+          priceCNY: product.priceCNY || 0,
+          priceUSD: product.priceUSD || 0,
           currency: product.currency || 'CNY',
-          image: product.image
+          image: product.image || ''
         },
         quantity: product.quantity || 1,
         addedAt: new Date().toISOString()
-      });
+      };
+      
+      cartDB.cart[userId].push(newCartItem);
+      console.log('🆕 Added new item to cart');
     }
     
+    // Escribir en la base de datos
     await writeCartDB(cartDB);
     
     res.json({
@@ -470,7 +510,7 @@ app.post("/cart/items", maybeRequireAuth, async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Error adding to cart:", error);
+    console.error("💥 Error adding to cart:", error);
     res.status(500).json({ error: "Failed to add product to cart" });
   }
 });
@@ -524,7 +564,6 @@ app.put("/cart/items/:itemId", maybeRequireAuth, async (req, res) => {
     }
     
     userCart[itemIndex].quantity = quantity;
-    cartDB.cart[user.id] = userCart;
     
     await writeCartDB(cartDB);
 
@@ -692,7 +731,7 @@ app.listen(PORT, async () => {
   console.log(`[api] listening on :${PORT}`);
   
   try {
-    // Inicializar archivo del carrito
+    // Inicializar archivo del carrito - DEBE SER LO PRIMERO
     await initializeCartDB();
     await connectRabbit();
   } catch (e) {
