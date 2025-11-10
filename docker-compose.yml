@@ -27,6 +27,8 @@ services:
     volumes:
       - ./sourcing/api/src:/app/src:ro
       - ./sourcing/api/cart-db.json:/app/cart-db.json
+      - impochina-cart-data:/app/data  # <-- AGREGAR ESTA LÍNEA
+
     restart: unless-stopped
 
   worker:
@@ -45,3 +47,5 @@ services:
 
 volumes:
   rabbitmq_data:
+  impochina-cart-data:
+    external: true

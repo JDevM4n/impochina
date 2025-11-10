@@ -28,7 +28,7 @@ const EMBEDDED_CONSUMER = process.env.EMBEDDED_CONSUMER === "1";
 
 // ---- util paths (JSON legacy por compatibilidad) ----
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CART_DB_PATH = path.resolve("/app/cart-db.json");
+const CART_DB_PATH = path.resolve("/app/data/cart-db.json"); // CAMBIADO A /app/data/
 
 async function readJson(file) {
   try { return JSON.parse(await fs.readFile(file, "utf8")); }
@@ -38,14 +38,22 @@ async function writeJson(file, obj) {
   await fs.writeFile(file, JSON.stringify(obj, null, 2));
 }
 
-// Helper functions para el carrito JSON - VERSIÓN ROBUSTA
+// Helper functions para el carrito JSON - VERSIÓN CON VOLUMEN
 async function readCartDB() {
   try {
+    // Asegurar que el directorio existe
+    await fs.mkdir(path.dirname(CART_DB_PATH), { recursive: true });
+    
     await fs.access(CART_DB_PATH);
     const data = await fs.readFile(CART_DB_PATH, 'utf8');
+    
+    if (!data || data.trim() === '') {
+      throw new Error('Empty file');
+    }
+    
     const parsed = JSON.parse(data);
     
-    // Validar y asegurar la estructura
+    // Validar estructura
     if (!parsed.cart || typeof parsed.cart !== 'object') {
       parsed.cart = {};
     }
@@ -53,12 +61,11 @@ async function readCartDB() {
       parsed.orders = [];
     }
     
-    console.log('📁 Cart DB loaded successfully');
+    console.log('✅ Cart DB loaded from:', CART_DB_PATH);
     return parsed;
   } catch (error) {
-    if (error.code === 'ENOENT') {
-      console.log('🆕 Creating new cart DB with default structure');
-      // Crear el archivo inmediatamente si no existe
+    if (error.code === 'ENOENT' || error.message === 'Empty file') {
+      console.log('🆕 Creating new cart DB at:', CART_DB_PATH);
       const initialData = { 
         orders: [], 
         cart: {} 
@@ -73,7 +80,10 @@ async function readCartDB() {
 
 async function writeCartDB(data) {
   try {
-    // Validar estructura antes de escribir
+    // Asegurar directorio
+    await fs.mkdir(path.dirname(CART_DB_PATH), { recursive: true });
+    
+    // Validar estructura
     if (!data.cart || typeof data.cart !== 'object') {
       data.cart = {};
     }
@@ -81,24 +91,20 @@ async function writeCartDB(data) {
       data.orders = [];
     }
     
-    // Asegurar que el directorio existe
-    const dir = path.dirname(CART_DB_PATH);
-    await fs.mkdir(dir, { recursive: true });
-    
-    // Escribir el archivo
+    // Escribir archivo
     await fs.writeFile(CART_DB_PATH, JSON.stringify(data, null, 2));
-    console.log('✅ Cart DB written successfully');
+    console.log('💾 Cart DB saved to:', CART_DB_PATH);
   } catch (error) {
-    console.error('❌ Error writing cart DB:', error);
+    console.error('❌ CRITICAL: Error writing cart DB:', error);
     throw error;
   }
 }
 
-// Función para inicializar el archivo del carrito si no existe
+// Función para inicializar el archivo del carrito
 async function initializeCartDB() {
   try {
     await readCartDB(); // Esto creará el archivo si no existe
-    console.log('[api] Cart DB initialized successfully');
+    console.log('[api] Cart DB initialized successfully at:', CART_DB_PATH);
   } catch (error) {
     console.error('[api] Cart DB initialization failed:', error);
   }
