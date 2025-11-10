@@ -44,12 +44,28 @@ async function readCartDB() {
     const data = await fs.readFile(CART_DB_PATH, 'utf8');
     return JSON.parse(data);
   } catch (error) {
-    return { orders: [], cart: {} }; // Estructura con carrito separado
+    // Retorna la estructura exacta que espera el código
+    return { 
+      orders: [], 
+      cart: {} 
+    };
   }
 }
 
 async function writeCartDB(data) {
   await fs.writeFile(CART_DB_PATH, JSON.stringify(data, null, 2));
+}
+
+// Función para inicializar el archivo del carrito si no existe
+async function initializeCartDB() {
+  try {
+    await fs.access(CART_DB_PATH);
+    console.log('[api] Cart DB exists');
+  } catch (error) {
+    console.log('[api] Creating initial cart DB file');
+    const initialData = { orders: [], cart: {} };
+    await writeCartDB(initialData);
+  }
 }
 
 // -------------------------------------
@@ -674,10 +690,13 @@ app.get("/", (_, res) =>
 // ------------------------------
 app.listen(PORT, async () => {
   console.log(`[api] listening on :${PORT}`);
+  
   try {
+    // Inicializar archivo del carrito
+    await initializeCartDB();
     await connectRabbit();
   } catch (e) {
-    console.error("[api] Rabbit connection failed:", e.message);
+    console.error("[api] Initialization failed:", e.message);
     process.exit(1);
   }
 });
