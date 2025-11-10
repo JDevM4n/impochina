@@ -29,6 +29,7 @@ export default function HomePage() {
   // Cargar carrito al iniciar
   useEffect(() => {
     if (token) {
+      sourcingApi.setToken(token); // Configurar el token
       loadCart();
     }
   }, [token]);
@@ -45,88 +46,73 @@ export default function HomePage() {
     if (!token) return;
     
     try {
-      const response = await fetch('http://localhost:3301/cart/items', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setCartItems(data.items || []);
-      }
+      const data = await sourcingApi.getCartItems();
+      setCartItems(data.items || []);
     } catch (error) {
       console.error('Error loading cart:', error);
     }
   };
 
-  const addToCart = async (product) => {
-    if (!token) {
-      alert("❌ Debes estar autenticado para agregar al carrito");
-      return;
-    }
+const addToCart = async (product) => {
+  if (!token) {
+    console.log('❌ No hay token de autenticación');
+    alert("❌ Debes estar autenticado para agregar al carrito");
+    return;
+  }
 
-    try {
-      console.log('🛒 Agregando al carrito:', product);
-      
-      const response = await fetch('http://localhost:3301/cart/items', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          product: {
-            url: product.url,
-            title: product.title,
-            title_zh: product.title_zh,
-            priceCNY: product.priceCNY,
-            priceUSD: product.priceUSD,
-            currency: product.currency || 'CNY',
-            image: product.image
-          }
-        })
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        console.log('✅ Producto agregado al carrito:', result);
-        alert('✅ Producto agregado al carrito');
-        
-        // Actualizar carrito
-        loadCart();
-      } else {
-        const error = await response.json();
-        throw new Error(error.error || 'Error al agregar al carrito');
-      }
-      
-    } catch (error) {
-      console.error('❌ Error agregando al carrito:', error);
+  try {
+    console.log('🛒 ===== INICIANDO ADD TO CART =====');
+    console.log('📦 Producto recibido:', product);
+    console.log('🔑 Token disponible:', token ? 'SÍ' : 'NO');
+    console.log('🌐 API Base URL:', sourcingApi.baseURL);
+    
+    // Configurar token explícitamente
+    sourcingApi.setToken(token);
+    console.log('✅ Token configurado en sourcingApi');
+    
+    // Preparar datos del producto
+    const productData = {
+      url: product.url,
+      title: product.title,
+      title_zh: product.title_zh,
+      priceCNY: product.priceCNY,
+      priceUSD: product.priceUSD,
+      currency: product.currency || 'CNY',
+      image: product.image
+    };
+    
+    console.log('📤 Enviando datos al servidor:', productData);
+    
+    const result = await sourcingApi.addToCart(productData);
+    
+    console.log('✅ Respuesta del servidor:', result);
+    alert('✅ Producto agregado al carrito');
+    
+    // Actualizar carrito
+    await loadCart();
+    
+  } catch (error) {
+    console.error('❌ ===== ERROR DETALLADO =====');
+    console.error('❌ Mensaje de error:', error.message);
+    console.error('❌ Stack completo:', error.stack);
+    
+    // Verificar si es error de red o del servidor
+    if (error.message.includes('Failed to fetch') || error.message.includes('Network')) {
+      alert('❌ Error de conexión. Verifica que el servidor esté funcionando en localhost:3301');
+    } else {
       alert(`❌ Error: ${error.message}`);
     }
-  };
+  }
+};
 
   const removeFromCart = async (cartItemId) => {
     try {
-      const response = await fetch(`http://localhost:3301/cart/items/${cartItemId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        console.log('✅ Producto eliminado del carrito');
-        loadCart(); // Recargar carrito
-      } else {
-        const error = await response.json();
-        throw new Error(error.error || 'Error eliminando del carrito');
-      }
+      await sourcingApi.removeFromCart(cartItemId);
+      console.log('✅ Producto eliminado del carrito');
+      loadCart(); // Recargar carrito
     } catch (error) {
       console.error('❌ Error eliminando del carrito:', error);
-      alert('❌ Error eliminando producto del carrito');
+      alert(`❌ Error: ${error.message}`);
     }
   };
 
@@ -141,29 +127,17 @@ export default function HomePage() {
     }
 
     try {
-      const response = await fetch('http://localhost:3301/cart/checkout', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        console.log('✅ Checkout completado:', result);
-        alert(`✅ ${result.message}`);
-        
-        // Limpiar carrito local
-        setCartItems([]);
-        setShowCart(false);
-        
-        // Redirigir a bodega
-        nav('/bodega');
-      } else {
-        const error = await response.json();
-        throw new Error(error.error || 'Error en checkout');
-      }
+      const result = await sourcingApi.checkout();
+      
+      console.log('✅ Checkout completado:', result);
+      alert(`✅ ${result.message}`);
+      
+      // Limpiar carrito local
+      setCartItems([]);
+      setShowCart(false);
+      
+      // Redirigir a bodega
+      nav('/bodega');
       
     } catch (error) {
       console.error('❌ Error en checkout:', error);
@@ -179,21 +153,12 @@ export default function HomePage() {
     }
 
     try {
-      const response = await fetch('http://localhost:3301/cart', {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        setCartItems([]);
-        alert('✅ Carrito vaciado');
-      }
+      await sourcingApi.clearCart();
+      setCartItems([]);
+      alert('✅ Carrito vaciado');
     } catch (error) {
       console.error('Error clearing cart:', error);
-      alert('❌ Error vaciando el carrito');
+      alert(`❌ Error vaciando el carrito: ${error.message}`);
     }
   };
 
