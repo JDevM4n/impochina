@@ -15,7 +15,9 @@ export default function HomePage() {
   const [openFAQ, setOpenFAQ] = useState(null);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [searchResult, setSearchResult] = useState(null);
-  const { logout, user } = useAuth();
+  const [cartItems, setCartItems] = useState([]);
+  const [showCart, setShowCart] = useState(false);
+  const { logout, user, token } = useAuth();
   const nav = useNavigate();
 
   const heroImages = [
@@ -24,6 +26,13 @@ export default function HomePage() {
     "https://thumbs.dreamstime.com/b/imagen-relacionada-con-la-log%C3%ADstica-y-el-transporte-de-mercanc%C3%ADas-camiones-fondo-dise%C3%B1o-abstracto-trav%C3%A9s-ruta-mapa-del-mundo-228273332.jpg",
   ];
 
+  // Cargar carrito al iniciar
+  useEffect(() => {
+    if (token) {
+      loadCart();
+    }
+  }, [token]);
+
   useEffect(() => {
     const interval = setInterval(() => {
       setActiveImageIndex((prev) => (prev + 1) % heroImages.length);
@@ -31,6 +40,164 @@ export default function HomePage() {
     return () => clearInterval(interval);
   }, [heroImages.length]);
 
+  // Funciones del carrito
+  const loadCart = async () => {
+    if (!token) return;
+    
+    try {
+      const response = await fetch('http://localhost:3301/cart/items', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setCartItems(data.items || []);
+      }
+    } catch (error) {
+      console.error('Error loading cart:', error);
+    }
+  };
+
+  const addToCart = async (product) => {
+    if (!token) {
+      alert("❌ Debes estar autenticado para agregar al carrito");
+      return;
+    }
+
+    try {
+      console.log('🛒 Agregando al carrito:', product);
+      
+      const response = await fetch('http://localhost:3301/cart/items', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          product: {
+            url: product.url,
+            title: product.title,
+            title_zh: product.title_zh,
+            priceCNY: product.priceCNY,
+            priceUSD: product.priceUSD,
+            currency: product.currency || 'CNY',
+            image: product.image
+          }
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Producto agregado al carrito:', result);
+        alert('✅ Producto agregado al carrito');
+        
+        // Actualizar carrito
+        loadCart();
+      } else {
+        const error = await response.json();
+        throw new Error(error.error || 'Error al agregar al carrito');
+      }
+      
+    } catch (error) {
+      console.error('❌ Error agregando al carrito:', error);
+      alert(`❌ Error: ${error.message}`);
+    }
+  };
+
+  const removeFromCart = async (cartItemId) => {
+    try {
+      const response = await fetch(`http://localhost:3301/cart/items/${cartItemId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        console.log('✅ Producto eliminado del carrito');
+        loadCart(); // Recargar carrito
+      } else {
+        const error = await response.json();
+        throw new Error(error.error || 'Error eliminando del carrito');
+      }
+    } catch (error) {
+      console.error('❌ Error eliminando del carrito:', error);
+      alert('❌ Error eliminando producto del carrito');
+    }
+  };
+
+  const checkout = async () => {
+    if (cartItems.length === 0) {
+      alert("🛒 El carrito está vacío");
+      return;
+    }
+
+    if (!confirm(`¿Confirmar compra de ${cartItems.length} producto(s) a tu bodega?`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch('http://localhost:3301/cart/checkout', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Checkout completado:', result);
+        alert(`✅ ${result.message}`);
+        
+        // Limpiar carrito local
+        setCartItems([]);
+        setShowCart(false);
+        
+        // Redirigir a bodega
+        nav('/bodega');
+      } else {
+        const error = await response.json();
+        throw new Error(error.error || 'Error en checkout');
+      }
+      
+    } catch (error) {
+      console.error('❌ Error en checkout:', error);
+      alert(`❌ Error en checkout: ${error.message}`);
+    }
+  };
+
+  const clearCart = async () => {
+    if (cartItems.length === 0) return;
+    
+    if (!confirm('¿Estás seguro de que quieres vaciar el carrito?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch('http://localhost:3301/cart', {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        setCartItems([]);
+        alert('✅ Carrito vaciado');
+      }
+    } catch (error) {
+      console.error('Error clearing cart:', error);
+      alert('❌ Error vaciando el carrito');
+    }
+  };
+
+  // Funciones existentes
   const nextImage = () => {
     setActiveImageIndex((prev) => (prev + 1) % heroImages.length);
   };
@@ -52,13 +219,11 @@ export default function HomePage() {
     try {
       console.log('🚀 Starting search for URL:', url);
       
-      // 1. Crear solicitud de scraping
       const response = await sourcingApi.createPurchaseRequest([url]);
       const { requestId } = response;
 
       console.log('📨 Request created with ID:', requestId);
 
-      // 2. Polling para obtener resultados
       const results = await waitForResults(requestId);
       
       console.log('🎉 Search completed successfully:', results);
@@ -82,24 +247,20 @@ export default function HomePage() {
     
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
-        // Esperar 2 segundos entre intentos
         await new Promise(resolve => setTimeout(resolve, 2000));
         
         console.log(`🔍 Polling attempt ${attempt + 1}/${maxAttempts} for ${requestId}`);
         
-        // Obtener estado
         const statusResponse = await sourcingApi.getPurchaseRequestStatus(requestId);
         console.log('📊 Current status:', statusResponse.status);
         
         if (statusResponse.status === 'COMPLETED') {
-          // Obtener resultados
           const resultsResponse = await sourcingApi.getPurchaseRequestResults(requestId);
           console.log('📦 Results received:', resultsResponse);
           return resultsResponse;
         } else if (statusResponse.status === 'FAILED') {
           throw new Error('La búsqueda falló en el servidor: ' + (statusResponse.error || 'Error desconocido'));
         }
-        // Si sigue en progreso, continuar polling
         
       } catch (error) {
         console.error(`❌ Error in polling attempt ${attempt + 1}:`, error);
@@ -201,7 +362,16 @@ export default function HomePage() {
               </Switch.Root>
             </div>
             
-            {/* ✅ CORREGIDO: Usar botones con onClick en lugar de enlaces */}
+            {/* Botón del carrito */}
+            <motion.button
+              className="nav-link cart-button"
+              onClick={() => setShowCart(!showCart)}
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              🛒 Carrito ({cartItems.length})
+            </motion.button>
+
             <motion.button
               className="nav-link"
               onClick={goToReportes}
@@ -234,6 +404,91 @@ export default function HomePage() {
             </motion.button>
           </nav>
         </motion.header>
+
+        {/* Panel del carrito */}
+        <AnimatePresence>
+          {showCart && (
+            <motion.div
+              className="cart-panel"
+              initial={{ opacity: 0, x: 300 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 300 }}
+              transition={{ duration: 0.3 }}
+            >
+              <div className="cart-header">
+                <h3>🛒 Mi Carrito</h3>
+                <button 
+                  className="close-cart"
+                  onClick={() => setShowCart(false)}
+                >
+                  ✕
+                </button>
+              </div>
+              
+              <div className="cart-content">
+                {cartItems.length === 0 ? (
+                  <div className="empty-cart">
+                    <p>El carrito está vacío</p>
+                    <small>Agrega productos desde los resultados de búsqueda</small>
+                  </div>
+                ) : (
+                  <>
+                    <div className="cart-items">
+                      {cartItems.map((item) => (
+                        <div key={item.cartItemId} className="cart-item">
+                          {item.product.image && (
+                            <img 
+                              src={item.product.image} 
+                              alt={item.product.title}
+                              className="cart-item-image"
+                              onError={(e) => {
+                                e.target.style.display = 'none';
+                              }}
+                            />
+                          )}
+                          <div className="cart-item-info">
+                            <strong>{item.product.title}</strong>
+                            <div className="cart-item-prices">
+                              {item.product.priceCNY && (
+                                <span>💰 {item.product.priceCNY} CNY</span>
+                              )}
+                              {item.product.priceUSD && (
+                                <span>💵 {item.product.priceUSD} USD</span>
+                              )}
+                            </div>
+                            <small>Cantidad: {item.quantity}</small>
+                          </div>
+                          <button 
+                            className="remove-from-cart"
+                            onClick={() => removeFromCart(item.cartItemId)}
+                            title="Eliminar del carrito"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    
+                    <div className="cart-actions">
+                      <button 
+                        className="checkout-btn"
+                        onClick={checkout}
+                      >
+                        📦 Comprar ({cartItems.length} productos)
+                      </button>
+                      <button 
+                        className="clear-cart-btn"
+                        onClick={clearCart}
+                      >
+                        🗑️ Vaciar carrito
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Hero Section */}
         <section className="hero-section">
@@ -344,8 +599,11 @@ export default function HomePage() {
                             >
                               🔗 Ver en sitio original
                             </a>
-                            <button className="btn-save">
-                              💾 Guardar en bodega
+                            <button 
+                              className="btn-add-to-cart"
+                              onClick={() => addToCart(item)}
+                            >
+                              🛒 Agregar al carrito
                             </button>
                           </div>
                         </div>
@@ -381,9 +639,177 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Resto del código de HomePage permanece igual */}
-        {/* ... (steps, features, testimonials, FAQ, footer, modal) ... */}
-        
+        {/* Cómo funciona */}
+        <section className="steps-section">
+          <motion.h2
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+          >
+            Cómo funciona 🚀
+          </motion.h2>
+          <div className="steps-grid">
+            {stepsData.map((step, index) => (
+              <motion.div
+                key={index}
+                className="step-card"
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                whileHover={{ scale: 1.05 }}
+                viewport={{ once: true }}
+                onClick={() => setSelectedStep(step)}
+              >
+                <div className="step-image">
+                  <img src={step.img} alt={step.title} />
+                </div>
+                <div className="step-info">
+                  <h3>{step.step}. {step.title}</h3>
+                  <p>{step.desc}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </section>
+
+        {/* Features */}
+        <section className="features-section">
+          <motion.h2
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+          >
+            Nuestras Ventajas ✨
+          </motion.h2>
+          <div className="features-grid">
+            {[
+              { text: "Búsqueda rápida ⚡", desc: "Encuentra lo que necesitas en segundos." },
+              { text: "Resultados confiables ✅", desc: "Solo mostramos datos verificados." },
+              { text: "Todo en un solo lugar 🌎", desc: "Centraliza tus productos fácilmente." },
+            ].map((feature, index) => (
+              <motion.div
+                key={index}
+                className="feature-card"
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                whileHover={{ scale: 1.05 }}
+                viewport={{ once: true }}
+              >
+                <h3>{feature.text}</h3>
+                <p>{feature.desc}</p>
+              </motion.div>
+            ))}
+          </div>
+        </section>
+
+        {/* Testimonios */}
+        <section className="testimonials-section">
+          <motion.h2
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+          >
+            Lo que dicen nuestros usuarios 💬
+          </motion.h2>
+          <div className="testimonials-grid">
+            {[
+              {
+                name: "Ana López",
+                role: "Importadora",
+                text: "Impochina me ha ahorrado horas de búsqueda. ¡Increíble!",
+                img: "https://static.vecteezy.com/system/resources/previews/025/869/567/non_2x/profile-image-of-woman-avatar-for-social-networks-with-half-circle-fashion-bright-illustration-in-trendy-style-vector.jpg",
+              },
+              {
+                name: "Carlos Ruiz",
+                role: "Emprendedor",
+                text: "Resultados precisos y confiables. Lo recomiendo totalmente.",
+                img: "https://static.vecteezy.com/system/resources/previews/036/594/092/non_2x/man-empty-avatar-photo-placeholder-for-social-networks-resumes-forums-and-dating-sites-male-and-female-no-photo-images-for-unfilled-user-profile-free-vector.jpg",
+              },
+            ].map((testimonial, index) => (
+              <motion.div
+                key={index}
+                className="testimonial-card"
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                whileHover={{ scale: 1.05 }}
+                viewport={{ once: true }}
+              >
+                <img src={testimonial.img} alt={testimonial.name} />
+                <div>
+                  <p>"{testimonial.text}"</p>
+                  <h4>{testimonial.name}</h4>
+                  <span>{testimonial.role}</span>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </section>
+
+        {/* FAQ */}
+        <section className="faq-section">
+          <motion.h2
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+          >
+            Preguntas Frecuentes ❓
+          </motion.h2>
+          <div className="faq-list">
+            {faqData.map((faq, index) => (
+              <motion.div
+                key={index}
+                className="faq-item"
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+              >
+                <button onClick={() => setOpenFAQ(openFAQ === index ? null : index)}>
+                  <span>{faq.question}</span>
+                  <span>{openFAQ === index ? "−" : "+"}</span>
+                </button>
+                {openFAQ === index && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                  >
+                    <p>{faq.answer}</p>
+                  </motion.div>
+                )}
+              </motion.div>
+            ))}
+          </div>
+        </section>
+
+        {/* Footer */}
+        <footer className="footer">
+          <p>© 2025 Impochina — Todos los derechos reservados</p>
+        </footer>
+
+        {/* Modal */}
+        <AnimatePresence>
+          {selectedStep && (
+            <motion.div
+              className="modal-overlay"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedStep(null)}
+            >
+              <motion.div
+                className="modal-content"
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.8, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <img src={selectedStep.img} alt={selectedStep.title} />
+                <h3>{selectedStep.step}. {selectedStep.title}</h3>
+                <p>{selectedStep.fullDesc}</p>
+                <button onClick={() => setSelectedStep(null)}>Cerrar</button>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.div>
     </div>
   );
