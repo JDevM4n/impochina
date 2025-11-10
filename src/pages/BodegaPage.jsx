@@ -1,21 +1,22 @@
 // src/pages/BodegaPage.jsx
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
-import { apiFetch, getOrdersBase } from '../api/apiService';
-
+import { getMyOrders, createOrder } from '../api/ordersService';
 import "../styles/Bodega.css";
 
 export default function BodegaPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const nav = useNavigate();
 
-  const [orders, setOrders] = useState([]);            // siempre array
-  const [loading, setLoading] = useState(true);        // estado de carga
-  const [submitting, setSubmitting] = useState(false); // estado del submit
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   // form
-  const [productName, setProductName] = useState("");
-  const [quantity, setQuantity] = useState(1);
+  const [item, setItem] = useState("");
+  const [qty, setQty] = useState(1);
   const [shippingPrice, setShippingPrice] = useState(0);
 
   const money = useMemo(
@@ -40,12 +41,21 @@ export default function BodegaPage() {
 
   useEffect(() => {
     let cancel = false;
-    (async () => {
+    
+    const loadOrders = async () => {
+      if (!token) {
+        setError("No hay token de autenticación");
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       setError("");
       try {
         const list = await getMyOrders(token);
-        if (!cancel) setOrders(Array.isArray(list) ? list : []);
+        if (!cancel) {
+          setOrders(Array.isArray(list) ? list : []);
+        }
       } catch (e) {
         if (!cancel) {
           setError(e?.message || "No se pudieron cargar los pedidos.");
@@ -54,15 +64,18 @@ export default function BodegaPage() {
       } finally {
         if (!cancel) setLoading(false);
       }
-    })();
+    };
+
+    loadOrders();
+    
     return () => {
       cancel = true;
     };
   }, [token]);
 
   const validate = () => {
-    if (!productName?.trim()) return "El nombre del producto es obligatorio.";
-    if (!Number.isFinite(quantity) || quantity <= 0)
+    if (!item?.trim()) return "El nombre del producto es obligatorio.";
+    if (!Number.isFinite(qty) || qty <= 0)
       return "La cantidad debe ser un número entero mayor a 0.";
     if (!Number.isFinite(shippingPrice) || shippingPrice < 0)
       return "El costo de envío no puede ser negativo.";
@@ -76,15 +89,21 @@ export default function BodegaPage() {
       setError(v);
       return;
     }
+    
+    if (!token) {
+      setError("No estás autenticado");
+      return;
+    }
+
     setError("");
     setSubmitting(true);
 
-    // Optimistic UI (crea un placeholder temporal)
+    // Optimistic UI
     const tempId = `temp-${Date.now()}`;
     const optimistic = {
       id: tempId,
-      productName: productName.trim(),
-      quantity: Number(quantity),
+      item: item.trim(),
+      qty: Number(qty),
       shippingPrice: Number(shippingPrice),
       _optimistic: true,
     };
@@ -92,8 +111,8 @@ export default function BodegaPage() {
 
     try {
       const created = await createOrder(token, {
-        productName: productName.trim(),
-        quantity: Number(quantity),
+        item: item.trim(),
+        qty: Number(qty),
         shippingPrice: Number(shippingPrice),
       });
 
@@ -104,9 +123,9 @@ export default function BodegaPage() {
         )
       );
 
-      // Limpia el formulario suave
-      setProductName("");
-      setQuantity(1);
+      // Limpia el formulario
+      setItem("");
+      setQty(1);
       setShippingPrice(0);
     } catch (e) {
       // Revierte el optimista
@@ -115,6 +134,10 @@ export default function BodegaPage() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const goToHome = () => {
+    nav("/home");
   };
 
   const list = Array.isArray(orders) ? orders : [];
@@ -127,8 +150,8 @@ export default function BodegaPage() {
           <span>Impochina</span>
         </div>
         <div className="header-actions">
-          <a className="link" href="/home">Inicio</a>
-          <a className="link" href="/bodega">Bodega</a>
+          <button className="link" onClick={goToHome}>Inicio</button>
+          <span className="user-info">Hola, {user?.username}</span>
         </div>
       </header>
 
@@ -139,13 +162,7 @@ export default function BodegaPage() {
 
           {error && (
             <div className="error">
-              {Array.isArray(error)
-                ? error.map((e, i) => (
-                    <p key={i}>{typeof e === 'object' ? JSON.stringify(e) : e}</p>
-                  ))
-                : typeof error === 'object'
-                ? JSON.stringify(error)
-                : error}
+              {typeof error === 'object' ? JSON.stringify(error) : error}
             </div>
           )}
 
@@ -153,10 +170,11 @@ export default function BodegaPage() {
             <div className="field">
               <label>Producto</label>
               <input
-                value={productName}
-                onChange={(e) => setProductName(e.target.value)}
+                value={item}
+                onChange={(e) => setItem(e.target.value)}
                 placeholder="Ej. Teclado mecánico"
                 maxLength={80}
+                disabled={submitting}
               />
             </div>
 
@@ -166,8 +184,9 @@ export default function BodegaPage() {
                 type="number"
                 min={1}
                 step={1}
-                value={quantity}
-                onChange={(e) => setQuantity(Number(e.target.value))}
+                value={qty}
+                onChange={(e) => setQty(Number(e.target.value))}
+                disabled={submitting}
               />
             </div>
 
@@ -179,11 +198,16 @@ export default function BodegaPage() {
                 step={100}
                 value={shippingPrice}
                 onChange={(e) => setShippingPrice(Number(e.target.value))}
+                disabled={submitting}
               />
             </div>
 
             <div className="actions">
-              <button className="btn-primary" type="submit" disabled={submitting}>
+              <button 
+                className="btn-primary" 
+                type="submit" 
+                disabled={submitting || !token}
+              >
                 {submitting ? "Creando..." : "Crear pedido"}
               </button>
             </div>
@@ -211,15 +235,15 @@ export default function BodegaPage() {
           ) : (
             <div className="grid">
               {list.map((o, idx) => {
-                const key =
-                  o.id ?? o._id ?? `${o.productName}-${o.quantity}-${idx}`;
+                const key = o.id ?? o._id ?? `${o.item}-${o.qty}-${idx}`;
                 const hasScrapedData = o.scrapedData;
+                const productName = o.item || o.productName;
                 
                 return (
                   <article className={`card ${o._optimistic ? "optimistic" : ""} ${hasScrapedData ? "scraped-product" : ""}`} key={key}>
                     <div className="card-head">
                       <strong className="card-title">
-                        {o.productName}
+                        {productName}
                       </strong>
                       <div className="badges">
                         {hasScrapedData && <span className="badge scraped">🔄 Scrapeado</span>}
@@ -234,7 +258,7 @@ export default function BodegaPage() {
                       <div className="product-image">
                         <img 
                           src={o.scrapedData.image} 
-                          alt={o.productName}
+                          alt={productName}
                           onError={(e) => {
                             e.target.style.display = 'none';
                           }}
@@ -245,7 +269,7 @@ export default function BodegaPage() {
                     <dl className="meta">
                       <div>
                         <dt>Cantidad</dt>
-                        <dd>{o.quantity}</dd>
+                        <dd>{o.qty || o.quantity}</dd>
                       </div>
                       <div>
                         <dt>Envío</dt>
@@ -274,7 +298,7 @@ export default function BodegaPage() {
                           {money.format(
                             (o.shippingPrice || 0) + 
                             (hasScrapedData && o.scrapedData?.priceUSD ? 
-                             o.scrapedData.priceUSD * 4000 * o.quantity : 0)
+                             o.scrapedData.priceUSD * 4000 * (o.qty || o.quantity) : 0)
                           )}
                         </dd>
                       </div>
@@ -298,7 +322,7 @@ export default function BodegaPage() {
                     </dl>
 
                     {/* Título original en chino */}
-                    {hasScrapedData && o.scrapedData?.originalTitle && o.scrapedData.originalTitle !== o.productName && (
+                    {hasScrapedData && o.scrapedData?.originalTitle && o.scrapedData.originalTitle !== productName && (
                       <div className="original-title">
                         <small>
                           <strong>Original:</strong> {o.scrapedData.originalTitle}
