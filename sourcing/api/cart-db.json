@@ -15,5 +15,23 @@
       "totalUsd": 79.72,
       "createdAt": "2025-09-18T02:46:31.581Z"
     }
-  ]
+  ],
+  "cart": {
+    "usuarioprueba2": [
+      {
+        "cartItemId": "1762736600476",
+        "product": {
+          "url": "https://item.taobao.com/item.htm?id=123456",
+          "title": "Producto de prueba",
+          "title_zh": "????",
+          "priceCNY": 100.5,
+          "priceUSD": 14.07,
+          "currency": "CNY",
+          "image": "https://example.com/image.jpg"
+        },
+        "quantity": 1,
+        "addedAt": "2025-11-10T01:03:20.478Z"
+      }
+    ]
+  }
 }
