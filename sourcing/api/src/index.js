@@ -28,7 +28,7 @@ const EMBEDDED_CONSUMER = process.env.EMBEDDED_CONSUMER === "1";
 
 // ---- util paths (JSON legacy por compatibilidad) ----
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CART_DB_PATH = path.resolve("/app/data/cart-db.json"); // CAMBIADO A /app/data/
+const CART_DB_PATH = path.resolve("/app/data/cart-db.json");
 
 async function readJson(file) {
   try { return JSON.parse(await fs.readFile(file, "utf8")); }
@@ -615,26 +615,42 @@ app.delete("/cart/items/:itemId", maybeRequireAuth, async (req, res) => {
   }
 });
 
-// Checkout - Mover carrito a bodega (ms2-orders)
+// Checkout - Mover carrito a bodega (ms2-orders) - VERSIÓN CON DEBUGGING COMPLETO
 app.post("/cart/checkout", maybeRequireAuth, async (req, res) => {
+  console.log('💰 ===== INICIANDO CHECKOUT =====');
+  console.log('👤 Usuario:', req.user?.id);
+  console.log('🔑 Authorization header:', req.headers.authorization ? 'Presente' : 'Faltante');
+  
   try {
     const user = req.user;
     
     if (!user) {
+      console.log('❌ No user found in request');
       return res.status(401).json({ error: "Authentication required" });
     }
 
     const cartDB = await readCartDB();
     const userCart = (cartDB.cart && cartDB.cart[user.id]) || [];
     
+    console.log('🛒 Carrito del usuario:', {
+      userId: user.id,
+      itemsCount: userCart.length,
+      items: userCart.map(item => ({
+        product: item.product.title,
+        quantity: item.quantity,
+        price: item.product.priceUSD
+      }))
+    });
+    
     if (userCart.length === 0) {
+      console.log('❌ Carrito vacío');
       return res.status(400).json({ error: "Cart is empty" });
     }
 
     // Preparar órdenes para ms2-orders
-    const ordersToCreate = userCart.map(item => {
+    const ordersToCreate = userCart.map((item, index) => {
       const product = item.product;
-      return {
+      const orderData = {
         item: product.title || 'Producto sin nombre',
         qty: item.quantity,
         shippingPrice: 0,
@@ -647,54 +663,129 @@ app.post("/cart/checkout", maybeRequireAuth, async (req, res) => {
           image: product.image
         }
       };
+      console.log(`📝 Orden ${index + 1} preparada:`, orderData);
+      return orderData;
     });
 
-    console.log('📦 Checkout - Creando órdenes en bodega:', {
-      userId: user.id,
-      ordersCount: ordersToCreate.length
-    });
+    console.log('📦 Enviando órdenes a ms2-orders...');
+    console.log('🌐 URL destino: http://ms2-orders:8000/orders');
 
     // Crear órdenes en ms2-orders
     const createdOrders = [];
-    for (const orderData of ordersToCreate) {
+    const failedOrders = [];
+    
+    for (const [index, orderData] of ordersToCreate.entries()) {
       try {
-        // Llamar al servicio ms2-orders para crear cada orden
+        console.log(`\n🔄 Intentando crear orden ${index + 1}/${ordersToCreate.length}...`);
+        
+        const requestBody = JSON.stringify(orderData);
+        console.log('📤 Request body:', requestBody);
+        
         const orderResponse = await fetch('http://ms2-orders:8000/orders', {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${req.headers.authorization?.replace('Bearer ', '')}`,
+            'Authorization': req.headers.authorization || '',
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify(orderData)
+          body: requestBody
         });
 
+        console.log(`📡 Response status: ${orderResponse.status}`);
+        console.log(`📡 Response headers:`, Object.fromEntries(orderResponse.headers.entries()));
+        
+        const responseText = await orderResponse.text();
+        console.log(`📥 Response body:`, responseText);
+
         if (orderResponse.ok) {
-          const orderResult = await orderResponse.json();
+          const orderResult = JSON.parse(responseText);
+          console.log(`✅ Orden ${index + 1} creada exitosamente:`, orderResult);
           createdOrders.push(orderResult);
         } else {
-          console.error('Error creating order in ms2-orders:', await orderResponse.text());
+          console.error(`❌ Error HTTP ${orderResponse.status} creando orden ${index + 1}:`, responseText);
+          failedOrders.push({
+            item: orderData.item,
+            status: orderResponse.status,
+            error: responseText
+          });
         }
       } catch (error) {
-        console.error('Error calling ms2-orders:', error);
+        console.error(`💥 Error de red/conexión para orden ${index + 1}:`, error.message);
+        failedOrders.push({
+          item: orderData.item,
+          error: error.message
+        });
       }
     }
 
-    // Limpiar carrito después del checkout exitoso
-    if (cartDB.cart && cartDB.cart[user.id]) {
-      delete cartDB.cart[user.id];
-      await writeCartDB(cartDB);
+    console.log('\n📊 RESUMEN DEL CHECKOUT:');
+    console.log(`✅ Órdenes exitosas: ${createdOrders.length}`);
+    console.log(`❌ Órdenes fallidas: ${failedOrders.length}`);
+    console.log(`📦 Total procesado: ${ordersToCreate.length}`);
+
+    // Limpiar carrito solo si algunas órdenes se crearon exitosamente
+    if (createdOrders.length > 0) {
+      if (cartDB.cart && cartDB.cart[user.id]) {
+        delete cartDB.cart[user.id];
+        await writeCartDB(cartDB);
+        console.log('🧹 Carrito limpiado exitosamente');
+      }
+    } else {
+      console.log('⚠️ No se limpió el carrito - ninguna orden fue exitosa');
     }
 
-    res.json({
-      success: true,
-      message: `Checkout completado - ${createdOrders.length} productos enviados a bodega`,
+    // Preparar respuesta
+    const response = {
+      success: createdOrders.length > 0,
+      message: createdOrders.length > 0 
+        ? `Checkout completado - ${createdOrders.length} productos enviados a bodega` 
+        : 'Checkout falló - no se pudieron crear órdenes en bodega',
       ordersCount: createdOrders.length,
       createdOrders: createdOrders
-    });
+    };
+
+    if (failedOrders.length > 0) {
+      response.failedOrders = failedOrders;
+      response.message += `, ${failedOrders.length} productos fallaron`;
+    }
+
+    console.log('📤 Enviando respuesta al cliente:', response);
+    res.json(response);
 
   } catch (error) {
-    console.error("Error during checkout:", error);
-    res.status(500).json({ error: "Checkout failed" });
+    console.error("💥 ERROR CRÍTICO durante checkout:", error);
+    console.error("💥 Stack trace:", error.stack);
+    res.status(500).json({ 
+      error: "Checkout failed",
+      details: error.message 
+    });
+  }
+});
+
+// Obtener órdenes de bodega
+app.get("/warehouse/orders", maybeRequireAuth, async (req, res) => {
+  try {
+    console.log('📦 Obteniendo órdenes de bodega...');
+    
+    const response = await fetch('http://ms2-orders:8000/orders', {
+      method: 'GET',
+      headers: {
+        'Authorization': req.headers.authorization || '',
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (response.ok) {
+      const orders = await response.json();
+      console.log(`✅ Órdenes obtenidas: ${orders.length}`);
+      res.json(orders);
+    } else {
+      const errorText = await response.text();
+      console.error('❌ Error obteniendo órdenes:', errorText);
+      res.status(response.status).json({ error: errorText });
+    }
+  } catch (error) {
+    console.error('💥 Error obteniendo órdenes de bodega:', error);
+    res.status(500).json({ error: "Failed to get warehouse orders" });
   }
 });
 
