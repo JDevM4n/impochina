@@ -1,4 +1,6 @@
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3301';
+// src/services/sourcingApi.js
+
+const API_BASE_URL = 'http://localhost:3301'; // 🔧 Conexión directa al backend
 
 class SourcingApiService {
   constructor() {
@@ -6,129 +8,122 @@ class SourcingApiService {
     this.token = null;
   }
 
+  // Guardar token de autenticación
   setToken(token) {
     this.token = token;
   }
-async request(endpoint, options = {}) {
-  const url = `${this.baseURL}${endpoint}`;
-  
-  // Configurar headers con autenticación
-  const headers = {
-    'Content-Type': 'application/json',
-    ...options.headers,
-  };
 
-  // Agregar token si está disponible
-  if (this.token) {
-    headers['Authorization'] = `Bearer ${this.token}`;
-    console.log('🔐 [sourcingApi] Authorization header added');
-  }
+  // Método general para peticiones
+  async request(endpoint, options = {}) {
+    const url = `${this.baseURL}${endpoint}`;
+    const headers = {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    };
 
-  console.log('🌐 [sourcingApi] Full URL:', url);
-  console.log('📋 [sourcingApi] Headers:', headers);
-  console.log('📦 [sourcingApi] Body:', options.body);
+    if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`;
+      console.log('🔐 [sourcingApi] Token agregado al header');
+    }
 
-  const config = {
-    headers,
-    ...options,
-  };
+    const config = {
+      method: options.method || 'GET',
+      headers,
+      body: options.body ? JSON.stringify(options.body) : undefined,
+    };
 
-  if (config.body && typeof config.body === 'object') {
-    config.body = JSON.stringify(config.body);
-  }
+    console.log(`🌐 [sourcingApi] ${config.method} → ${url}`);
+    console.log('📦 Body:', config.body);
 
-  console.log(`🔄 [sourcingApi] API Call: ${config.method || 'GET'} ${url}`);
+    try {
+      const response = await fetch(url, config);
+      console.log(`📡 [sourcingApi] Estado: ${response.status}`);
 
-  try {
-    const response = await fetch(url, config);
-    
-    console.log(`📡 [sourcingApi] Response status: ${response.status} for ${url}`);
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`❌ [sourcingApi] HTTP error! status: ${response.status}`, errorText);
-      
-      let errorData;
-      try {
-        errorData = JSON.parse(errorText);
-      } catch {
-        errorData = { error: errorText };
+      const text = await response.text();
+
+      if (!response.ok) {
+        console.error(`❌ [sourcingApi] Error HTTP ${response.status}:`, text);
+        let errorData;
+        try {
+          errorData = JSON.parse(text);
+        } catch {
+          errorData = { error: text };
+        }
+        throw new Error(errorData.error || 'Error en la solicitud');
       }
-      
-      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-    }
 
-    const data = await response.json();
-    console.log(`✅ [sourcingApi] API Success:`, data);
-    return data;
-  } catch (error) {
-    console.error('❌ [sourcingApi] API request failed:', error);
-    throw error;
+      const data = JSON.parse(text);
+      console.log('✅ [sourcingApi] Respuesta exitosa:', data);
+      return data;
+    } catch (error) {
+      console.error('🚨 [sourcingApi] Falló la petición:', error.message);
+      throw error;
+    }
   }
-}
 
+  // Crear solicitud de compra
   async createPurchaseRequest(urls) {
-    if (typeof urls === 'string') {
-      urls = [urls];
-    }
-    console.log('📦 Creating purchase request for URLs:', urls);
+    if (typeof urls === 'string') urls = [urls];
+    console.log('🛍️ Creando solicitud de compra:', urls);
+
     return this.request('/purchase-requests', {
       method: 'POST',
       body: { urls },
     });
   }
 
+  // Consultar estado de una solicitud
   async getPurchaseRequestStatus(requestId) {
-    console.log('📊 Getting status for request:', requestId);
+    console.log('📊 Consultando estado:', requestId);
     return this.request(`/purchase-requests/${requestId}`);
   }
 
+  // Consultar resultados
   async getPurchaseRequestResults(requestId) {
-    console.log('📋 Getting results for request:', requestId);
+    console.log('📋 Consultando resultados:', requestId);
     return this.request(`/purchase-requests/${requestId}/results`);
   }
 
-  // Nuevos métodos para el carrito
+  // ----- 🛒 Funciones del carrito -----
   async addToCart(product) {
-  console.log('🛒 [sourcingApi] Adding to cart:', product);
-  console.log('🔑 [sourcingApi] Token:', this.token ? 'Present' : 'Missing');
-  
-  return this.request('/cart/items', {
-    method: 'POST',
-    body: { product },
-  });
-}
+    console.log('🛒 Agregando al carrito:', product);
+    return this.request('/cart/items', {
+      method: 'POST',
+      body: { product },
+    });
+  }
 
   async getCartItems() {
-    console.log('📦 Getting cart items');
+    console.log('📦 Obteniendo productos del carrito');
     return this.request('/cart/items');
   }
 
   async removeFromCart(cartItemId) {
-    console.log('🗑️ Removing from cart:', cartItemId);
+    console.log('🗑️ Eliminando producto del carrito:', cartItemId);
     return this.request(`/cart/items/${cartItemId}`, {
       method: 'DELETE',
     });
   }
 
   async checkout() {
-    console.log('💰 Processing checkout');
+    console.log('💰 Procesando pago');
     return this.request('/cart/checkout', {
       method: 'POST',
     });
   }
 
   async clearCart() {
-    console.log('🧹 Clearing cart');
+    console.log('🧹 Vaciando carrito');
     return this.request('/cart', {
       method: 'DELETE',
     });
   }
 
+  // ----- 🩺 Health Check -----
   async healthCheck() {
+    console.log('💓 Verificando estado del servicio');
     return this.request('/health');
   }
 }
-a
 
 export const sourcingApi = new SourcingApiService();

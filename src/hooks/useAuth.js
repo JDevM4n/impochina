@@ -1,91 +1,72 @@
 // src/hooks/useAuth.js
-import { createContext, useContext, useEffect, useState } from 'react';
-import * as authApi from '../api/authService';
+import React, { createContext, useContext, useState, useEffect } from "react";
 
-const AuthContext = createContext(null);
+const API_URL = "http://localhost:8001"; // 🔧 cambia si tu backend usa otro puerto
+const AuthContext = createContext();
 
-export function AuthProvider({ children }) {
-  const [token, setToken] = useState(null);
+export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [token, setToken] = useState(localStorage.getItem("token") || null);
 
   useEffect(() => {
-    const initializeAuth = async () => {
-      const t = localStorage.getItem('token');
-      if (t) {
-        setToken(t);
-        try {
-          // Decodificar el token para obtener info del usuario
-          const payload = JSON.parse(atob(t.split('.')[1]));
-          setUser({ username: payload.username });
-        } catch (e) {
-          console.error('Error decoding token:', e);
-          // Si el token es inválido, limpiar
-          localStorage.removeItem('token');
-          setToken(null);
-        }
-      }
-      setLoading(false);
-    };
-
-    initializeAuth();
-  }, []);
+    if (token) {
+      // podrías hacer un fetch aquí para validar el token si tu API lo permite
+      setUser({ username: "usuario" });
+    }
+  }, [token]);
 
   const login = async (username, password) => {
-    try {
-      const data = await authApi.login(username, password);
-      setToken(data.access_token);
-      localStorage.setItem('token', data.access_token);
-      
-      // Guardar info del usuario
-      try {
-        const payload = JSON.parse(atob(data.access_token.split('.')[1]));
-        setUser({ username: payload.username });
-      } catch (e) {
-        console.error('Error decoding token:', e);
-      }
-      
-      return data;
-    } catch (error) {
-      throw error;
+    console.log("🔐 Intentando login...");
+    const response = await fetch(`${API_URL}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error("❌ Error en login:", errorData);
+      throw new Error(errorData.detail || "Credenciales inválidas");
     }
+
+    const data = await response.json();
+    localStorage.setItem("token", data.access_token);
+    setToken(data.access_token);
+    setUser({ username });
+    return data;
   };
 
   const register = async (username, password) => {
-    try {
-      await authApi.register(username, password);
-    } catch (error) {
-      throw error;
+    console.log("🧾 Intentando registro...");
+    const response = await fetch(`${API_URL}/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error("❌ Error en registro:", errorData);
+      throw new Error(errorData.detail || "Error al registrar");
     }
+
+    const data = await response.json();
+    return data;
   };
 
   const logout = () => {
-    authApi.logout();
-    setToken(null);
+    console.log("👋 Cerrando sesión...");
+    localStorage.removeItem("token");
     setUser(null);
-  };
-
-  const value = {
-    token,
-    user,
-    isAuth: !!token,
-    loading,
-    login,
-    register,
-    logout
+    setToken(null);
   };
 
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={{ user, token, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );
-}
+};
 
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-}
+// Hook para acceder fácilmente al contexto
+export const useAuth = () => useContext(AuthContext);

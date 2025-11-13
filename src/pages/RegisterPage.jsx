@@ -1,4 +1,3 @@
-// src/pages/RegisterPage.jsx
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
@@ -8,22 +7,47 @@ export default function RegisterPage() {
   const { register } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [message, setMessage] = useState("");
+  const [status, setStatus] = useState({ type: "", message: "" });
   const [loading, setLoading] = useState(false);
 
   const onSubmit = async (e) => {
     e.preventDefault();
-    setMessage("");
+    setStatus({ type: "", message: "" });
+
+    // Expresión regular: mínimo 8 caracteres, una mayúscula y un número
+    const passwordRegex = /^(?=.*[A-Z])(?=.*\d)[A-Za-z\d@$!%*?&]{8,}$/;
+
+    if (!username.trim() || !password.trim()) {
+      setStatus({
+        type: "error",
+        message: "Por favor completa todos los campos.",
+      });
+      return;
+    }
+
+    if (!passwordRegex.test(password)) {
+      setStatus({
+        type: "error",
+        message:
+          "La contraseña debe tener al menos 8 caracteres, una mayúscula y un número.",
+      });
+      return;
+    }
+
     setLoading(true);
-    
     try {
       await register(username, password);
-      setMessage("✅ Usuario creado exitosamente. Ahora puedes iniciar sesión.");
-      // Limpiar formulario
+      setStatus({
+        type: "success",
+        message: "✅ Usuario creado exitosamente. Ahora puedes iniciar sesión.",
+      });
       setUsername("");
       setPassword("");
     } catch (e) {
-      setMessage(e.message || "Error al crear la cuenta");
+      setStatus({
+        type: "error",
+        message: e.message || "❌ Error al crear la cuenta. Intenta nuevamente.",
+      });
     } finally {
       setLoading(false);
     }
@@ -55,14 +79,15 @@ export default function RegisterPage() {
         <div className="auth-box">
           <h2>Crear Cuenta</h2>
           <p className="auth-subtitle">Regístrate para comenzar a usar Impochina</p>
-          
-          {message && (
-            <div className={message.startsWith("✅") ? "success-message" : "error-message"}>
-              {message}
+
+          {/* Mensajes de estado */}
+          {status.message && (
+            <div className={`status-banner ${status.type}`}>
+              {status.message}
             </div>
           )}
 
-          <form onSubmit={onSubmit}>
+          <form onSubmit={onSubmit} noValidate>
             <div className="input-group">
               <span className="icon">👤</span>
               <input
@@ -70,11 +95,11 @@ export default function RegisterPage() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="Usuario"
-                required
+                aria-label="Usuario"
                 disabled={loading}
               />
             </div>
-            
+
             <div className="input-group">
               <span className="icon">🔒</span>
               <input
@@ -82,17 +107,17 @@ export default function RegisterPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Contraseña"
-                required
+                aria-label="Contraseña"
                 disabled={loading}
-                minLength={3}
               />
             </div>
-            
-            <button 
-              className="register-btn" 
-              type="submit" 
-              disabled={loading}
-            >
+
+            {/* Pista visual de la contraseña */}
+            <div className="password-hint">
+              <small>🔐 Debe tener mínimo 8 caracteres, una mayúscula y un número.</small>
+            </div>
+
+            <button className="login-btn" type="submit" disabled={loading}>
               {loading ? (
                 <>
                   <div className="spinner"></div>
@@ -108,6 +133,11 @@ export default function RegisterPage() {
             <Link to="/login" className="auth-link">
               ¿Ya tienes cuenta? Inicia sesión
             </Link>
+          </div>
+
+          {/* Ayuda contextual */}
+          <div className="help-text">
+            <p>💡 Usa una contraseña segura y recuerda no compartir tus credenciales.</p>
           </div>
         </div>
       </div>

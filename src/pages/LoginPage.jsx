@@ -1,4 +1,3 @@
-/// src/pages/LoginPage.jsx
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
@@ -9,23 +8,28 @@ export default function LoginPage() {
   const nav = useNavigate();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [status, setStatus] = useState({ type: "", message: "" });
   const [loading, setLoading] = useState(false);
 
   const onSubmit = async (e) => {
     e.preventDefault();
-    setError("");
-    setLoading(true);
-    
-    console.log('🔐 Intentando login...', { username });
+    setStatus({ type: "", message: "" });
 
+    if (!username || !password) {
+      setStatus({ type: "error", message: "Por favor, completa todos los campos." });
+      return;
+    }
+
+    setLoading(true);
     try {
       await login(username, password);
-      console.log('✅ Login exitoso, redirigiendo a /home');
-      nav("/home");
+      setStatus({ type: "success", message: "Inicio de sesión exitoso. Redirigiendo..." });
+      setTimeout(() => nav("/home"), 1200);
     } catch (e) {
-      console.error('❌ Error en login:', e);
-      setError(e.message || "Error al iniciar sesión");
+      setStatus({
+        type: "error",
+        message: e.message || "❌ Usuario o contraseña incorrectos. Intenta nuevamente.",
+      });
     } finally {
       setLoading(false);
     }
@@ -33,7 +37,7 @@ export default function LoginPage() {
 
   return (
     <div className="auth-container">
-      {/* Columna izquierda */}
+      {/* Panel izquierdo */}
       <div className="auth-left">
         <div className="logo">Impochina</div>
         <div className="illustration">
@@ -43,28 +47,29 @@ export default function LoginPage() {
           />
         </div>
         <div className="auth-features">
-          <h3>Gestiona tus importaciones</h3>
+          <h3>Gestiona tus importaciones fácilmente</h3>
           <ul>
             <li>📦 Busca productos en 1688</li>
-            <li>🚚 Gestiona tu bodega</li>
-            <li>📊 Sigue tus pedidos</li>
+            <li>🚚 Administra tu bodega</li>
+            <li>📊 Supervisa tus pedidos</li>
           </ul>
         </div>
       </div>
 
-      {/* Columna derecha */}
+      {/* Panel derecho */}
       <div className="auth-right">
         <div className="auth-box">
           <h2>Iniciar Sesión</h2>
           <p className="auth-subtitle">Accede a tu cuenta de Impochina</p>
-          
-          {error && (
-            <div className="error-message">
-              {error}
+
+          {/* Mensaje de estado */}
+          {status.message && (
+            <div className={`status-banner ${status.type}`}>
+              {status.message}
             </div>
           )}
 
-          <form onSubmit={onSubmit}>
+          <form onSubmit={onSubmit} noValidate>
             <div className="input-group">
               <span className="icon">👤</span>
               <input
@@ -72,11 +77,11 @@ export default function LoginPage() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="Usuario"
-                required
                 disabled={loading}
+                aria-label="Usuario"
               />
             </div>
-            
+
             <div className="input-group">
               <span className="icon">🔒</span>
               <input
@@ -84,16 +89,12 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Contraseña"
-                required
                 disabled={loading}
+                aria-label="Contraseña"
               />
             </div>
-            
-            <button 
-              className="login-btn" 
-              type="submit" 
-              disabled={loading}
-            >
+
+            <button className="login-btn" type="submit" disabled={loading}>
               {loading ? (
                 <>
                   <div className="spinner"></div>
@@ -109,9 +110,14 @@ export default function LoginPage() {
             <Link to="/register" className="auth-link">
               ¿No tienes cuenta? Regístrate
             </Link>
-            <a href="#" className="auth-link">
+            <Link to="/recover" className="auth-link">
               ¿Olvidaste tu contraseña?
-            </a>
+            </Link>
+          </div>
+
+          {/* Ayuda contextual */}
+          <div className="help-text">
+            <p>💡 Si tienes problemas para ingresar, verifica tus credenciales o contacta soporte.</p>
           </div>
         </div>
       </div>
