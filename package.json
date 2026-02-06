@@ -1,0 +1,35 @@
+{
+  "name": "imporchina",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@radix-ui/react-switch": "^1.2.6",
+    "axios": "^1.12.2",
+    "framer-motion": "^12.23.24",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.30.1",
+    "recharts": "^3.3.0"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "react-scripts": "^5.0.1"
+  }
+}

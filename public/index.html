@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="description" content="Impochina - Gestión de importaciones desde China" />
+    
+    <!-- Preload de fuentes para mejor performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Estilos base -->
+    <style>
+      /* Reset básico */
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      
+      body {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        background: #f8fafc;
+      }
+      
+      /* Loading inicial */
+      #root {
+        min-height: 100vh;
+      }
+      
+      .app-loading {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        font-size: 1.2rem;
+      }
+    </style>
+    
+    <title>Impochina - Tu plataforma de importaciones</title>
+  </head>
+  <body>
+    <noscript>
+      <div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;">
+        <h1>JavaScript Requerido</h1>
+        <p>Necesitas habilitar JavaScript para ejecutar esta aplicación.</p>
+      </div>
+    </noscript>
+    
+    <!-- Punto de montaje de React -->
+    <div id="root">
+      <div class="app-loading">
+        <div style="text-align: center;">
+          <div style="font-size: 2rem; margin-bottom: 1rem;">📦</div>
+          <p>Cargando Impochina...</p>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Scripts de analytics (opcional) -->
+    <script>
+      // Analytics o scripts de terceros pueden ir aquí
+      console.log('Impochina - Plataforma de importaciones');
+    </script>
+  </body>
+</html>
